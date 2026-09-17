@@ -23,7 +23,7 @@
           style="pointer-events: auto"
         >
           <!-- ── Input ── -->
-          <div class="flex items-center gap-2 px-4 py-3">
+          <div class="flex items-center px-4 py-3">
             <div class="relative flex items-center flex-1">
               <div
                 class="absolute inset-y-0 left-0 flex items-center text-ink-gray-8 pl-3"
@@ -55,100 +55,69 @@
                 @input="onInput"
               />
             </div>
-
-            <Popover placement="bottom-end">
-              <template #target="{ togglePopover }">
-                <Button @click="togglePopover()">
-                  {{
-                    activeFilters.length
-                      ? `${activeFilters.length} type${activeFilters.length === 1 ? '' : 's'}`
-                      : 'All types'
-                  }}
-                </Button>
-              </template>
-              <template #body="{ close: closePopover }">
-                <div
-                  class="crm-xt-search-filters my-2 w-44 p-1.5 rounded-lg bg-surface-elevation-2 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none"
-                >
-                  <div
-                    v-for="f in FILTERS"
-                    :key="f.key"
-                    class="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-gray-2 cursor-pointer"
-                    @click="toggleFilter(f.key)"
-                  >
-                    <span
-                      class="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
-                      :class="
-                        activeFilters.includes(f.key)
-                          ? 'bg-surface-gray-10'
-                          : 'border border-outline-gray-4'
-                      "
-                    >
-                      <span
-                        v-if="activeFilters.includes(f.key)"
-                        class="text-ink-base"
-                        v-html="sizedIcon('check', 'size-3')"
-                      ></span>
-                    </span>
-                    <span class="text-sm text-ink-gray-7">{{ f.label }}</span>
-                  </div>
-                  <div
-                    v-if="activeFilters.length"
-                    class="border-t border-outline-gray-1 mt-1 pt-1"
-                  >
-                    <button
-                      type="button"
-                      class="w-full text-left rounded px-2 py-1.5 text-sm text-ink-gray-5 hover:bg-surface-gray-2"
-                      @click="clearFilters(closePopover)"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </Popover>
           </div>
 
-          <hr />
+          <!-- ── Type tabs ── -->
+          <div
+            class="flex items-center gap-1 px-2 py-1.5 border-b border-outline-gray-1 overflow-x-auto"
+          >
+            <button
+              v-for="t in TABS"
+              :key="t.key"
+              type="button"
+              class="rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors"
+              :class="
+                isTabActive(t.key)
+                  ? 'bg-surface-gray-2 text-ink-gray-9'
+                  : 'text-ink-gray-5 hover:bg-surface-gray-1 hover:text-ink-gray-7'
+              "
+              @click="selectTab(t.key)"
+            >
+              {{ t.label }}
+            </button>
+          </div>
 
           <!-- ── Results ── -->
-          <div class="p-2 max-h-96 overflow-y-auto">
+          <div
+            class="p-2 max-h-96 overflow-y-auto"
+            @mousemove="ignoreHover = false"
+          >
             <ul v-if="results.length" class="flex flex-col gap-1">
               <li
                 v-for="(result, i) in results"
                 :key="result.doctype + '::' + result.name"
-                class="flex items-start gap-3 py-2 px-2 cursor-pointer rounded-lg"
+                :ref="(el) => (resultRefs[i] = el)"
+                class="flex items-center gap-3 py-2 px-2 cursor-pointer rounded-lg"
                 :class="
                   activeIdx === i
                     ? 'bg-surface-gray-2'
                     : 'hover:bg-surface-gray-2'
                 "
                 @click="selectResult(result)"
-                @mouseenter="activeIdx = i"
+                @mouseenter="hoverResult(i)"
               >
+                <Avatar :label="result.title || result.name" size="sm" />
                 <div class="min-w-0 flex-1">
-                  <div
-                    class="flex items-center gap-2 text-base text-ink-gray-8 truncate"
-                  >
-                    <span class="truncate">{{
-                      result.title || result.name
-                    }}</span>
-                    <span
-                      v-if="result.doctype === 'Converted Lead'"
-                      class="inline-flex items-center gap-1 shrink-0 text-xs font-medium text-ink-green-9"
-                      title="Converted"
-                    >
-                      <span v-html="sizedIcon('circle-check', 'size-3')"></span>
-                      Converted
-                    </span>
+                  <div class="text-base text-ink-gray-8 truncate">
+                    {{ result.title || result.name }}
                   </div>
-                  <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
+                  <!-- eslint-disable vue/no-v-html -- indexed field values are passed through
+                       frappe.utils.strip_html_tags() in get_formatted_value() at document-save
+                       time (frappe/utils/global_search.py), before ever reaching __global_search
+                       .content — the only tags that can appear here are the <mark>/<br> this
+                       excerpt intentionally adds itself, not attacker-controlled field values -->
                   <div
                     class="text-sm text-ink-gray-5 truncate"
                     v-html="result.excerpt"
                   ></div>
                   <!-- eslint-enable vue/no-v-html -->
                 </div>
+                <Badge
+                  :label="TYPE_TAGS[result.doctype]?.label || result.doctype"
+                  :theme="TYPE_TAGS[result.doctype]?.theme || 'gray'"
+                  size="sm"
+                  class="shrink-0"
+                />
               </li>
             </ul>
 
@@ -227,21 +196,9 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
-import { Popover, Button } from 'frappe-ui'
-import { getLucideIcon } from '../lucideIcons'
+import { Avatar, Badge } from 'frappe-ui'
 
 const PAGE_SIZE = 20
-
-// The host crm app's Tailwind build never sees this file, so only utility
-// classes it already generates elsewhere actually render here — arbitrary
-// variants like `[&_svg]:h-3` are never in that set. lucide-static's raw SVGs
-// hardcode width/height="24", so strip those and put a real `size-N` class
-// straight on the <svg> (mirrors utils/sidebarRow.js's buildIconSvg).
-function sizedIcon(name, sizeClass) {
-  return getLucideIcon(name)
-    .replace(/\s(width|height)="[^"]*"/g, '')
-    .replace(/class="([^"]*)"/, `class="$1 ${sizeClass}"`)
-}
 
 let domParser = null
 const LIKELY_HTML_OR_ENTITY_RE = /<[a-zA-Z!/]|&[#a-zA-Z]/
@@ -258,36 +215,75 @@ const loading = ref(false)
 const hasMore = ref(false)
 const activeIdx = ref(0)
 const inputRef = ref(null)
+let resultRefs = []
+// Arrow-key nav scrolls the list, which can leave the mouse cursor sitting
+// over a *different* row without it actually moving — firing a spurious
+// mouseenter there. Ignore hover-driven highlighting until the mouse moves
+// for real again, so it can't fight the keyboard for activeIdx.
+let ignoreHover = false
+
+function hoverResult(i) {
+  if (!ignoreHover) activeIdx.value = i
+}
 
 let offset = 0
 let debounceTimer = null
 let inflight = null
 
-// ── Search filters (mirrors backend SEARCH_FILTERS keys in api/search.py) ───
-// Multi-select: an empty selection means "All".
-const FILTERS = [
-  { key: 'CRM Lead', label: 'Lead' },
-  { key: 'Converted Lead', label: 'Converted' },
-  { key: 'CRM Deal', label: 'Deal' },
-  { key: 'CRM Organization', label: 'Organization' },
-  { key: 'FCRM Note', label: 'Note' },
-  { key: 'CRM Task', label: 'Task' },
-  { key: 'Contact', label: 'Contact' },
+// ── Type tabs — each maps to one or more backend SEARCH_FILTERS keys ────────
+// Leads and Converted are separate, non-overlapping tabs (mirrors the
+// backend's CRM Lead vs Converted Lead split) so multi-select covers every
+// case: just Leads, just Converted, or both together for all leads.
+const TABS = [
+  { key: 'all', label: 'All', filters: null },
+  { key: 'leads', label: 'Leads', filters: ['CRM Lead'] },
+  { key: 'converted', label: 'Converted', filters: ['Converted Lead'] },
+  { key: 'deals', label: 'Deals', filters: ['CRM Deal'] },
+  { key: 'orgs', label: 'Organizations', filters: ['CRM Organization'] },
+  { key: 'notes', label: 'Notes', filters: ['FCRM Note'] },
+  { key: 'tasks', label: 'Tasks', filters: ['CRM Task'] },
+  { key: 'contacts', label: 'Contacts', filters: ['Contact'] },
 ]
 
-const activeFilters = ref([])
+// Multi-select: an empty selection (or picking "all") means "every type".
+const activeTabs = ref([])
 
-function toggleFilter(key) {
-  activeFilters.value = activeFilters.value.includes(key)
-    ? activeFilters.value.filter((k) => k !== key)
-    : [...activeFilters.value, key]
+function isTabActive(key) {
+  return key === 'all'
+    ? activeTabs.value.length === 0
+    : activeTabs.value.includes(key)
+}
+
+function selectTab(key) {
+  if (key === 'all') {
+    activeTabs.value = []
+  } else {
+    activeTabs.value = activeTabs.value.includes(key)
+      ? activeTabs.value.filter((k) => k !== key)
+      : [...activeTabs.value, key]
+  }
   doSearch(false)
 }
 
-function clearFilters(closePopover) {
-  activeFilters.value = []
-  doSearch(false)
-  closePopover()
+function activeFilters() {
+  if (!activeTabs.value.length) return null
+  const keys = new Set()
+  for (const tabKey of activeTabs.value) {
+    for (const f of TABS.find((t) => t.key === tabKey)?.filters ?? [])
+      keys.add(f)
+  }
+  return [...keys]
+}
+
+// ── Type tags — how a result row shows whether it's a lead, deal, note... ──
+const TYPE_TAGS = {
+  'CRM Lead': { label: 'Lead', theme: 'blue' },
+  'Converted Lead': { label: 'Converted', theme: 'green' },
+  'CRM Deal': { label: 'Deal', theme: 'violet' },
+  'CRM Organization': { label: 'Organization', theme: 'gray' },
+  'FCRM Note': { label: 'Note', theme: 'gray' },
+  'CRM Task': { label: 'Task', theme: 'amber' },
+  Contact: { label: 'Contact', theme: 'gray' },
 }
 
 // ── Route map (handles both native FCRM and bridge doctype names) ───────────
@@ -319,7 +315,7 @@ watch(
       results.value = []
       hasMore.value = false
       activeIdx.value = 0
-      activeFilters.value = []
+      activeTabs.value = []
       nextTick(() => inputRef.value?.focus())
     }
   },
@@ -348,13 +344,22 @@ function handleKeyDown(e) {
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     activeIdx.value = Math.min(activeIdx.value + 1, results.value.length - 1)
+    scrollActiveIntoView()
     return
   }
   if (e.key === 'ArrowUp') {
     e.preventDefault()
     activeIdx.value = Math.max(activeIdx.value - 1, 0)
+    scrollActiveIntoView()
     return
   }
+}
+
+function scrollActiveIntoView() {
+  ignoreHover = true
+  nextTick(() =>
+    resultRefs[activeIdx.value]?.scrollIntoView({ block: 'nearest' }),
+  )
 }
 
 function onInput() {
@@ -400,7 +405,7 @@ function doSearch(append) {
       text: query.value,
       start: offset,
       limit: PAGE_SIZE,
-      doctypes: activeFilters.value.length ? activeFilters.value : null,
+      doctypes: activeFilters(),
     }),
   })
     .then((r) => r.json())
@@ -490,15 +495,3 @@ function selectResult(result) {
     )
 }
 </script>
-
-<style>
-/* frappe-ui's Popover teleports its panel to <body> with a hardcoded z-[100],
-   which lands underneath this dialog's z-index: 9999 overlay — the dropdown
-   opens but is invisible/unclickable. :has() scopes the fix to just our own
-   filter popover (via the marker class below) so no other Popover in the
-   host app is affected, and this being unscoped/unlayered CSS already beats
-   Tailwind's @layer utilities regardless of selector specificity. */
-[data-slot='content']:has(.crm-xt-search-filters) {
-  z-index: 10000;
-}
-</style>

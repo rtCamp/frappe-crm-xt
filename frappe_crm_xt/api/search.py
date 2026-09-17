@@ -1,6 +1,25 @@
 from __future__ import annotations
 
+import re
+
 import frappe
+
+# Strips the raw "Converted : 0/1" segment (CRM Lead's `converted` checkbox is
+# indexed for search) out of the excerpt shown under a result — the type Badge
+# already tells the user it's converted, so repeating it as raw field text is
+# just noise. Matches it with a separator on either side so removal never
+# leaves a dangling "|||"/"<br>" behind, wherever the field lands in the string.
+CONVERTED_FIELD_RE = re.compile(
+	r"(\|\|\||<br>)\s*Converted\s*:\s*[01]\b|Converted\s*:\s*[01]\b\s*(\|\|\||<br>)",
+	re.IGNORECASE,
+)
+
+
+def _strip_converted_field(text: str) -> str:
+	text = CONVERTED_FIELD_RE.sub("", text)
+	text = re.sub(r"^\s*Converted\s*:\s*[01]\b\s*$", "", text, flags=re.IGNORECASE)
+	return text.strip()
+
 
 # Frappe's search_link defaults to 10 rows; the CRM Link control never sends a
 # page_length, so dropdowns top out at 10. Bump the default to 20 — the most the
@@ -142,7 +161,9 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 				# snippet; `content` is the same text with no highlighting at all — we were
 				# discarding the highlighted one and re-sending the plain text under the
 				# same key, so the frontend's <mark> styling never actually got any markup.
-				"marked_string": r.get("marked_string") or r.get("content") or r.get("name"),
+				"marked_string": _strip_converted_field(
+					r.get("marked_string") or r.get("content") or r.get("name")
+				),
 			}
 		)
 
