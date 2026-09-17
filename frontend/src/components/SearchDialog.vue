@@ -57,6 +57,23 @@
             </div>
           </div>
 
+          <div class="flex flex-wrap gap-1 px-4 pb-3">
+            <button
+              v-for="f in FILTERS"
+              :key="f.label"
+              type="button"
+              class="text-xs px-2 py-1 rounded-full transition-colors"
+              :class="
+                activeFilter === f.key
+                  ? 'bg-surface-gray-4 text-ink-gray-9'
+                  : 'bg-surface-gray-1 text-ink-gray-6 hover:bg-surface-gray-2'
+              "
+              @click="selectFilter(f.key)"
+            >
+              {{ f.label }}
+            </button>
+          </div>
+
           <hr />
 
           <!-- ── Results ── -->
@@ -158,9 +175,29 @@ let offset = 0
 let debounceTimer = null
 let inflight = null
 
+// ── Search filters (mirrors backend SEARCH_FILTERS keys in api/search.py) ───
+const FILTERS = [
+  { key: null, label: 'All' },
+  { key: 'CRM Lead', label: 'Lead' },
+  { key: 'Converted Lead', label: 'Converted' },
+  { key: 'CRM Deal', label: 'Deal' },
+  { key: 'CRM Organization', label: 'Org' },
+  { key: 'FCRM Note', label: 'Note' },
+  { key: 'CRM Task', label: 'Task' },
+  { key: 'Contact', label: 'Contact' },
+]
+const activeFilter = ref(null)
+
+function selectFilter(key) {
+  if (activeFilter.value === key) return
+  activeFilter.value = key
+  doSearch(false)
+}
+
 // ── Route map (handles both native FCRM and bridge doctype names) ───────────
 const ROUTES = {
   'CRM Lead': (n) => ({ path: `/crm/leads/${encodeURIComponent(n)}` }),
+  'Converted Lead': (n) => ({ path: `/crm/leads/${encodeURIComponent(n)}` }),
   Lead: (n) => ({ path: `/app/lead/${encodeURIComponent(n)}` }),
   'CRM Deal': (n) => ({ path: `/crm/deals/${encodeURIComponent(n)}` }),
   Contact: (n) => ({ path: `/crm/contacts/${encodeURIComponent(n)}` }),
@@ -180,6 +217,7 @@ function routeFor(doctype, name) {
 // ── Doctype labels ───────────────────────────────────────────────────────────
 const DT_LABELS = {
   'CRM Lead': 'Lead',
+  'Converted Lead': 'Converted',
   Lead: 'ERP Lead',
   'CRM Deal': 'Deal',
   Opportunity: 'ERP Deal',
@@ -204,6 +242,7 @@ watch(
       results.value = []
       hasMore.value = false
       activeIdx.value = 0
+      activeFilter.value = null
       nextTick(() => inputRef.value?.focus())
     }
   },
@@ -280,7 +319,12 @@ function doSearch(append) {
       'X-Frappe-CSRF-Token': getCsrfToken(),
       Accept: 'application/json',
     },
-    body: JSON.stringify({ text: query.value, start: offset, limit: 10 }),
+    body: JSON.stringify({
+      text: query.value,
+      start: offset,
+      limit: 10,
+      doctype: activeFilter.value,
+    }),
   })
     .then((r) => r.json())
     .then((data) => {

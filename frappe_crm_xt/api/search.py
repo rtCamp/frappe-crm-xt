@@ -55,46 +55,83 @@ def search_link(
 	)
 
 
-@frappe.whitelist()
-def get_search_results(text: str, start: int = 0, limit: int = 10):
-	start = int(start)
-	limit = int(limit)
-	allowed_doctypes = [
-		"CRM Lead",
-		"CRM Deal",
-		"CRM Organization",
-		"FCRM Note",
-		"CRM Task",
-		"Contact",
-	]
+# "Converted Lead" isn't a real doctype — CRM Lead has a `converted` checkbox,
+# so it's modelled as a second filter over the same doctype, split by that flag.
+SEARCH_FILTERS = {
+	"CRM Lead": {"doctype": "CRM Lead", "converted": 0},
+	"Converted Lead": {"doctype": "CRM Lead", "converted": 1},
+	"CRM Deal": {"doctype": "CRM Deal"},
+	"CRM Organization": {"doctype": "CRM Organization"},
+	"FCRM Note": {"doctype": "FCRM Note"},
+	"CRM Task": {"doctype": "CRM Task"},
+	"Contact": {"doctype": "Contact"},
+}
 
+
+def _search_one_doctype(text, doctype, limit):
+	"""Full-text search restricted to a single real doctype (permission-checked by the callee)."""
 	if "frappe_search" in frappe.get_installed_apps():
 		from frappe_search.api.search import get_global_search_results
 
-		raw = get_global_search_results(
-			text=text,
-			start=start,
-			limit=limit,
-			allowed_doctypes=allowed_doctypes,
+		raw, _ = get_global_search_results(
+			text=text, start=0, limit=limit, doctype=doctype, allowed_doctypes=[doctype]
 		)
-		results_list, has_more = (
-			(raw[0], raw[1]) if (isinstance(raw, list | tuple) and len(raw) == 2) else (raw, False)
-		)
-		if len(results_list) > limit:
-			has_more = True
-			results_list = list(results_list)[:limit]
-		return results_list, has_more
+		return raw or []
 
 	from frappe.utils.global_search import search as global_search
 
-	raw = global_search(text, start=start, limit=limit + 1) or []
+	return global_search(text, limit=limit, doctype=doctype) or []
 
-	has_more = len(raw) > limit
+
+@frappe.whitelist()
+def get_search_results(text: str, start: int = 0, limit: int = 10, doctype: str | None = None):
+	start = int(start)
+	limit = int(limit)
+
+	if doctype and doctype not in SEARCH_FILTERS:
+		frappe.throw(f"Unknown search filter: {doctype}")
+
+	active_filters = [doctype] if doctype else list(SEARCH_FILTERS.keys())
+	real_doctypes = {SEARCH_FILTERS[f]["doctype"] for f in active_filters}
+
+	# The converted flag isn't in the search index, so it's applied as a
+	# post-filter below — overfetch CRM Lead to compensate for rows it drops.
+	fetch_size = start + limit + 1
+	lead_fetch_size = fetch_size * 2
+
+	raw_by_doctype = {
+		dt: _search_one_doctype(text, dt, lead_fetch_size if dt == "CRM Lead" else fetch_size)
+		for dt in real_doctypes
+	}
+
+	converted_by_name = {}
+	if "CRM Lead" in raw_by_doctype:
+		lead_names = [r["name"] for r in raw_by_doctype["CRM Lead"]]
+		converted_by_name = {
+			d.name: d.converted
+			for d in frappe.get_all(
+				"CRM Lead", filters={"name": ["in", lead_names]}, fields=["name", "converted"]
+			)
+		}
+
+	combined = []
+	for f in active_filters:
+		cfg = SEARCH_FILTERS[f]
+		rows = raw_by_doctype[cfg["doctype"]]
+		if "converted" in cfg:
+			rows = [r for r in rows if converted_by_name.get(r["name"], 0) == cfg["converted"]]
+		for r in rows:
+			combined.append({**r, "filter": f})
+
+	combined.sort(key=lambda r: r.get("rank", 0), reverse=True)
+	page = combined[start : start + limit + 1]
+	has_more = len(page) > limit
+
 	results = []
-	for r in raw[:limit]:
+	for r in page[:limit]:
 		results.append(
 			{
-				"doctype": r.get("doctype"),
+				"doctype": r.get("filter"),
 				"name": r.get("name"),
 				"title": r.get("title") or r.get("name"),
 				"marked_string": r.get("content") or r.get("name"),
