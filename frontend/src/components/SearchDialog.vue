@@ -17,14 +17,14 @@
         @mousedown.self="close"
       >
         <div
-          class="my-8 inline-block w-full transform overflow-hidden rounded-xl bg-surface-elevation-2 text-left align-middle shadow-xl focus-visible:outline-none max-w-xl"
+          class="my-8 inline-block w-full transform overflow-hidden rounded-xl bg-surface-elevation-2 text-left align-middle shadow-xl ring-1 ring-black ring-opacity-5 focus-visible:outline-none max-w-2xl"
           role="dialog"
           aria-label="CRM Search"
           style="pointer-events: auto"
         >
           <!-- ── Input ── -->
-          <div class="flex items-center">
-            <div class="relative flex items-center mx-4 py-3 flex-1">
+          <div class="flex items-center gap-2 px-4 py-3">
+            <div class="relative flex items-center flex-1">
               <div
                 class="absolute inset-y-0 left-0 flex items-center text-ink-gray-8 pl-3"
               >
@@ -50,39 +50,74 @@
                 name="crm-xt-search"
                 placeholder="CRM Search"
                 autocomplete="off"
-                class="text-base rounded h-7 py-1.5 pl-8 pr-2 border border-outline-gray-2 bg-surface-base placeholder-ink-gray-4 hover:border-outline-gray-3 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:shadow-sm focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors w-full"
+                class="text-base rounded-lg h-7 py-1.5 pl-8 pr-2 border border-outline-gray-2 bg-surface-base placeholder-ink-gray-4 hover:border-outline-gray-3 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:shadow-sm focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors w-full"
                 @keydown="handleKeyDown"
                 @input="onInput"
               />
             </div>
-          </div>
 
-          <div class="flex flex-wrap gap-1 px-4 pb-3">
-            <button
-              v-for="f in FILTERS"
-              :key="f.label"
-              type="button"
-              class="text-xs px-2 py-1 rounded-full transition-colors"
-              :class="
-                activeFilter === f.key
-                  ? 'bg-surface-gray-4 text-ink-gray-9'
-                  : 'bg-surface-gray-1 text-ink-gray-6 hover:bg-surface-gray-2'
-              "
-              @click="selectFilter(f.key)"
-            >
-              {{ f.label }}
-            </button>
+            <Popover placement="bottom-end">
+              <template #target="{ togglePopover }">
+                <Button @click="togglePopover()">
+                  {{
+                    activeFilters.length
+                      ? `${activeFilters.length} type${activeFilters.length === 1 ? '' : 's'}`
+                      : 'All types'
+                  }}
+                </Button>
+              </template>
+              <template #body="{ close: closePopover }">
+                <div
+                  class="crm-xt-search-filters my-2 w-44 p-1.5 rounded-lg bg-surface-elevation-2 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none"
+                >
+                  <div
+                    v-for="f in FILTERS"
+                    :key="f.key"
+                    class="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-gray-2 cursor-pointer"
+                    @click="toggleFilter(f.key)"
+                  >
+                    <span
+                      class="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
+                      :class="
+                        activeFilters.includes(f.key)
+                          ? 'bg-surface-gray-10'
+                          : 'border border-outline-gray-4'
+                      "
+                    >
+                      <span
+                        v-if="activeFilters.includes(f.key)"
+                        class="text-ink-base"
+                        v-html="sizedIcon('check', 'size-3')"
+                      ></span>
+                    </span>
+                    <span class="text-sm text-ink-gray-7">{{ f.label }}</span>
+                  </div>
+                  <div
+                    v-if="activeFilters.length"
+                    class="border-t border-outline-gray-1 mt-1 pt-1"
+                  >
+                    <button
+                      type="button"
+                      class="w-full text-left rounded px-2 py-1.5 text-sm text-ink-gray-5 hover:bg-surface-gray-2"
+                      @click="clearFilters(closePopover)"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </Popover>
           </div>
 
           <hr />
 
           <!-- ── Results ── -->
-          <div class="p-4 max-h-96 overflow-y-auto">
-            <ul v-if="results.length" class="divide-y divide-gray-200">
+          <div class="p-2 max-h-96 overflow-y-auto">
+            <ul v-if="results.length" class="flex flex-col gap-1">
               <li
                 v-for="(result, i) in results"
                 :key="result.doctype + '::' + result.name"
-                class="py-2 px-2 cursor-pointer rounded"
+                class="flex items-start gap-3 py-2 px-2 cursor-pointer rounded-lg"
                 :class="
                   activeIdx === i
                     ? 'bg-surface-gray-2'
@@ -91,33 +126,46 @@
                 @click="selectResult(result)"
                 @mouseenter="activeIdx = i"
               >
-                <div class="text-base text-ink-gray-8">
-                  {{ dtLabel(result.doctype) }} :
-                  {{ result.title || result.name }}
+                <div class="min-w-0 flex-1">
+                  <div
+                    class="flex items-center gap-2 text-base text-ink-gray-8 truncate"
+                  >
+                    <span class="truncate">{{
+                      result.title || result.name
+                    }}</span>
+                    <span
+                      v-if="result.doctype === 'Converted Lead'"
+                      class="inline-flex items-center gap-1 shrink-0 text-xs font-medium text-ink-green-9"
+                      title="Converted"
+                    >
+                      <span v-html="sizedIcon('circle-check', 'size-3')"></span>
+                      Converted
+                    </span>
+                  </div>
+                  <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
+                  <div
+                    class="text-sm text-ink-gray-5 truncate"
+                    v-html="result.excerpt"
+                  ></div>
+                  <!-- eslint-enable vue/no-v-html -->
                 </div>
-                <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
-                <div
-                  class="text-sm text-ink-gray-5"
-                  v-html="result.excerpt"
-                ></div>
-                <!-- eslint-enable vue/no-v-html -->
               </li>
             </ul>
 
             <div
               v-else-if="query.length > 0 && !loading"
-              class="text-sm text-ink-gray-5 text-center py-4"
+              class="text-sm text-ink-gray-5 text-center py-10"
             >
               No results for
               <strong class="text-ink-gray-8">{{ query }}</strong>
             </div>
             <div
               v-else-if="loading"
-              class="text-sm text-ink-gray-5 text-center py-4"
+              class="text-sm text-ink-gray-5 text-center py-10"
             >
               Searching…
             </div>
-            <div v-else class="py-4">
+            <div v-else class="py-10">
               <p class="text-xs text-ink-gray-4 text-center">
                 Type to search leads, deals, contacts…
               </p>
@@ -128,13 +176,38 @@
 
           <!-- ── Footer ── -->
           <div class="flex items-center justify-between px-4 h-12">
-            <div>
+            <div class="flex items-center gap-4">
               <p v-if="results.length" class="text-xs text-ink-gray-5">
                 <b>{{ results.length }}</b> result{{
                   results.length === 1 ? '' : 's'
                 }}
                 found
               </p>
+              <div
+                class="hidden sm:flex items-center gap-3 text-xs text-ink-gray-4"
+              >
+                <span class="flex items-center gap-1">
+                  <kbd
+                    class="font-mono text-xs rounded bg-surface-gray-2 px-1.5 py-0.5"
+                    >↑↓</kbd
+                  >
+                  Navigate
+                </span>
+                <span class="flex items-center gap-1">
+                  <kbd
+                    class="font-mono text-xs rounded bg-surface-gray-2 px-1.5 py-0.5"
+                    >↵</kbd
+                  >
+                  Select
+                </span>
+                <span class="flex items-center gap-1">
+                  <kbd
+                    class="font-mono text-xs rounded bg-surface-gray-2 px-1.5 py-0.5"
+                    >Esc</kbd
+                  >
+                  Close
+                </span>
+              </div>
             </div>
             <div class="flex justify-center">
               <button
@@ -154,6 +227,21 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { Popover, Button } from 'frappe-ui'
+import { getLucideIcon } from '../lucideIcons'
+
+const PAGE_SIZE = 20
+
+// The host crm app's Tailwind build never sees this file, so only utility
+// classes it already generates elsewhere actually render here — arbitrary
+// variants like `[&_svg]:h-3` are never in that set. lucide-static's raw SVGs
+// hardcode width/height="24", so strip those and put a real `size-N` class
+// straight on the <svg> (mirrors utils/sidebarRow.js's buildIconSvg).
+function sizedIcon(name, sizeClass) {
+  return getLucideIcon(name)
+    .replace(/\s(width|height)="[^"]*"/g, '')
+    .replace(/class="([^"]*)"/, `class="$1 ${sizeClass}"`)
+}
 
 let domParser = null
 const LIKELY_HTML_OR_ENTITY_RE = /<[a-zA-Z!/]|&[#a-zA-Z]/
@@ -176,22 +264,30 @@ let debounceTimer = null
 let inflight = null
 
 // ── Search filters (mirrors backend SEARCH_FILTERS keys in api/search.py) ───
+// Multi-select: an empty selection means "All".
 const FILTERS = [
-  { key: null, label: 'All' },
   { key: 'CRM Lead', label: 'Lead' },
   { key: 'Converted Lead', label: 'Converted' },
   { key: 'CRM Deal', label: 'Deal' },
-  { key: 'CRM Organization', label: 'Org' },
+  { key: 'CRM Organization', label: 'Organization' },
   { key: 'FCRM Note', label: 'Note' },
   { key: 'CRM Task', label: 'Task' },
   { key: 'Contact', label: 'Contact' },
 ]
-const activeFilter = ref(null)
 
-function selectFilter(key) {
-  if (activeFilter.value === key) return
-  activeFilter.value = key
+const activeFilters = ref([])
+
+function toggleFilter(key) {
+  activeFilters.value = activeFilters.value.includes(key)
+    ? activeFilters.value.filter((k) => k !== key)
+    : [...activeFilters.value, key]
   doSearch(false)
+}
+
+function clearFilters(closePopover) {
+  activeFilters.value = []
+  doSearch(false)
+  closePopover()
 }
 
 // ── Route map (handles both native FCRM and bridge doctype names) ───────────
@@ -214,25 +310,6 @@ function routeFor(doctype, name) {
   return fn ? fn(name) : null
 }
 
-// ── Doctype labels ───────────────────────────────────────────────────────────
-const DT_LABELS = {
-  'CRM Lead': 'Lead',
-  'Converted Lead': 'Converted',
-  Lead: 'ERP Lead',
-  'CRM Deal': 'Deal',
-  Opportunity: 'ERP Deal',
-  Contact: 'Contact',
-  'CRM Organization': 'Org',
-  'FCRM Note': 'Note',
-  'CRM Task': 'Task',
-  Event: 'Calendar',
-  'CRM Call Log': 'Call',
-}
-
-function dtLabel(dt) {
-  return DT_LABELS[dt] || dt
-}
-
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 watch(
   () => props.show,
@@ -242,7 +319,7 @@ watch(
       results.value = []
       hasMore.value = false
       activeIdx.value = 0
-      activeFilter.value = null
+      activeFilters.value = []
       nextTick(() => inputRef.value?.focus())
     }
   },
@@ -322,8 +399,8 @@ function doSearch(append) {
     body: JSON.stringify({
       text: query.value,
       start: offset,
-      limit: 10,
-      doctype: activeFilter.value,
+      limit: PAGE_SIZE,
+      doctypes: activeFilters.value.length ? activeFilters.value : null,
     }),
   })
     .then((r) => r.json())
@@ -342,7 +419,7 @@ function doSearch(append) {
         ? [...results.value, ...mapResults(list)]
         : mapResults(list)
       activeIdx.value = 0
-      offset += 10
+      offset += PAGE_SIZE
     })
     .catch((err) => {
       if (err.name !== 'AbortError') results.value = []
@@ -413,3 +490,15 @@ function selectResult(result) {
     )
 }
 </script>
+
+<style>
+/* frappe-ui's Popover teleports its panel to <body> with a hardcoded z-[100],
+   which lands underneath this dialog's z-index: 9999 overlay — the dropdown
+   opens but is invisible/unclickable. :has() scopes the fix to just our own
+   filter popover (via the marker class below) so no other Popover in the
+   host app is affected, and this being unscoped/unlayered CSS already beats
+   Tailwind's @layer utilities regardless of selector specificity. */
+[data-slot='content']:has(.crm-xt-search-filters) {
+  z-index: 10000;
+}
+</style>

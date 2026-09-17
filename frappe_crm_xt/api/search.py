@@ -73,9 +73,11 @@ def _search_one_doctype(text, doctype, limit):
 	if "frappe_search" in frappe.get_installed_apps():
 		from frappe_search.api.search import get_global_search_results
 
-		raw, _ = get_global_search_results(
+		# Returns a bare [] instead of a (results, has_more) tuple for text < 3 chars.
+		result = get_global_search_results(
 			text=text, start=0, limit=limit, doctype=doctype, allowed_doctypes=[doctype]
 		)
+		raw = result[0] if isinstance(result, tuple) else result
 		return raw or []
 
 	from frappe.utils.global_search import search as global_search
@@ -84,14 +86,16 @@ def _search_one_doctype(text, doctype, limit):
 
 
 @frappe.whitelist()
-def get_search_results(text: str, start: int = 0, limit: int = 10, doctype: str | None = None):
+def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: list[str] | None = None):
 	start = int(start)
 	limit = int(limit)
 
-	if doctype and doctype not in SEARCH_FILTERS:
-		frappe.throw(f"Unknown search filter: {doctype}")
+	if doctypes:
+		unknown = [f for f in doctypes if f not in SEARCH_FILTERS]
+		if unknown:
+			frappe.throw(f"Unknown search filter(s): {', '.join(unknown)}")
 
-	active_filters = [doctype] if doctype else list(SEARCH_FILTERS.keys())
+	active_filters = doctypes or list(SEARCH_FILTERS.keys())
 	real_doctypes = {SEARCH_FILTERS[f]["doctype"] for f in active_filters}
 
 	# The converted flag isn't in the search index, so it's applied as a
@@ -134,7 +138,11 @@ def get_search_results(text: str, start: int = 0, limit: int = 10, doctype: str 
 				"doctype": r.get("filter"),
 				"name": r.get("name"),
 				"title": r.get("title") or r.get("name"),
-				"marked_string": r.get("content") or r.get("name"),
+				# frappe_search's own `marked_string` is the highlighted (<mark>) context
+				# snippet; `content` is the same text with no highlighting at all — we were
+				# discarding the highlighted one and re-sending the plain text under the
+				# same key, so the frontend's <mark> styling never actually got any markup.
+				"marked_string": r.get("marked_string") or r.get("content") or r.get("name"),
 			}
 		)
 

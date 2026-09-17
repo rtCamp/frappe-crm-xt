@@ -50,6 +50,7 @@ import flag from 'lucide-static/icons/flag.svg?raw'
 import bookmark from 'lucide-static/icons/bookmark.svg?raw'
 import search from 'lucide-static/icons/search.svg?raw'
 import folder from 'lucide-static/icons/folder.svg?raw'
+import check from 'lucide-static/icons/check.svg?raw'
 
 /** Map of icon-name → raw SVG string from lucide-static */
 const ICONS = {
@@ -95,6 +96,7 @@ const ICONS = {
   bookmark: bookmark,
   search: search,
   folder: folder,
+  check: check,
 }
 
 /**
