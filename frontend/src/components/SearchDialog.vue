@@ -57,6 +57,40 @@
             </div>
           </div>
 
+          <!-- ── Doctype filters ── -->
+          <div
+            v-if="availableDoctypes.length"
+            class="flex items-center gap-1 px-4 pb-3 flex-wrap"
+          >
+            <button
+              v-if="multiSelect"
+              type="button"
+              class="rounded px-2 py-1 text-xs transition-colors"
+              :class="
+                activeDoctypes.length === 0
+                  ? 'bg-surface-gray-3 text-ink-gray-9'
+                  : 'bg-surface-gray-1 text-ink-gray-5 hover:bg-surface-gray-2'
+              "
+              @click="selectAll"
+            >
+              All
+            </button>
+            <button
+              v-for="dt in availableDoctypes"
+              :key="dt"
+              type="button"
+              class="rounded px-2 py-1 text-xs transition-colors"
+              :class="
+                isDoctypeActive(dt)
+                  ? 'bg-surface-gray-3 text-ink-gray-9'
+                  : 'bg-surface-gray-1 text-ink-gray-5 hover:bg-surface-gray-2'
+              "
+              @click="toggleDoctype(dt)"
+            >
+              {{ dtLabel(dt) }}
+            </button>
+          </div>
+
           <hr />
 
           <!-- ── Results ── -->
@@ -168,7 +202,6 @@ const ROUTES = {
     path: `/crm/organizations/${encodeURIComponent(n)}`,
   }),
   'FCRM Note': () => ({ path: `/crm/notes/view/list` }),
-  'CRM Task': () => ({ path: `/crm/tasks/view/list` }),
   'CRM Call Log': () => ({ path: `/crm/call-logs/view/list` }),
 }
 
@@ -186,13 +219,54 @@ const DT_LABELS = {
   Contact: 'Contact',
   'CRM Organization': 'Org',
   'FCRM Note': 'Note',
-  'CRM Task': 'Task',
   Event: 'Calendar',
   'CRM Call Log': 'Call',
 }
 
 function dtLabel(dt) {
   return DT_LABELS[dt] || dt
+}
+
+// ── Doctype filters — which doctypes are searchable, and whether more than
+// one can be picked at once (frappe_search: yes; core global_search: no) ────
+const availableDoctypes = ref([])
+const multiSelect = ref(true)
+const activeDoctypes = ref([])
+
+function isDoctypeActive(dt) {
+  return activeDoctypes.value.includes(dt)
+}
+
+function selectAll() {
+  activeDoctypes.value = []
+  doSearch(false)
+}
+
+function toggleDoctype(dt) {
+  activeDoctypes.value = multiSelect.value
+    ? activeDoctypes.value.includes(dt)
+      ? activeDoctypes.value.filter((d) => d !== dt)
+      : [...activeDoctypes.value, dt]
+    : [dt]
+  doSearch(false)
+}
+
+function fetchFilters() {
+  fetch('/api/method/frappe_crm_xt.api.search.get_search_filters', {
+    method: 'GET',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      availableDoctypes.value = data?.message?.doctypes || []
+      multiSelect.value = !!data?.message?.multi
+      // Single-select has no "All" — land on the first filter instead.
+      activeDoctypes.value = multiSelect.value
+        ? []
+        : availableDoctypes.value.slice(0, 1)
+    })
+    .catch(() => {})
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -204,6 +278,7 @@ watch(
       results.value = []
       hasMore.value = false
       activeIdx.value = 0
+      fetchFilters()
       nextTick(() => inputRef.value?.focus())
     }
   },
@@ -280,7 +355,12 @@ function doSearch(append) {
       'X-Frappe-CSRF-Token': getCsrfToken(),
       Accept: 'application/json',
     },
-    body: JSON.stringify({ text: query.value, start: offset, limit: 10 }),
+    body: JSON.stringify({
+      text: query.value,
+      start: offset,
+      limit: 10,
+      doctypes: activeDoctypes.value.length ? activeDoctypes.value : null,
+    }),
   })
     .then((r) => r.json())
     .then((data) => {
