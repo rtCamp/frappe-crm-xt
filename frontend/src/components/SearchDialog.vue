@@ -94,12 +94,12 @@
           <hr />
 
           <!-- ── Results ── -->
-          <div class="p-4 max-h-96 overflow-y-auto">
-            <ul v-if="results.length" class="divide-y divide-gray-200">
+          <div class="p-2 max-h-96 overflow-y-auto">
+            <ul v-if="results.length" class="flex flex-col gap-0.5">
               <li
                 v-for="(result, i) in results"
                 :key="result.doctype + '::' + result.name"
-                class="py-2 px-2 cursor-pointer rounded"
+                class="flex items-center gap-3 py-2 px-2 cursor-pointer rounded-lg"
                 :class="
                   activeIdx === i
                     ? 'bg-surface-gray-2'
@@ -108,16 +108,24 @@
                 @click="selectResult(result)"
                 @mouseenter="activeIdx = i"
               >
-                <div class="text-base text-ink-gray-8">
-                  {{ dtLabel(result.doctype) }} :
-                  {{ result.title || result.name }}
+                <Avatar :label="result.title || result.name" size="lg" />
+                <div class="min-w-0 flex-1 text-left">
+                  <div class="text-base text-ink-gray-8 truncate">
+                    {{ result.title || result.name }}
+                  </div>
+                  <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
+                  <div
+                    class="text-sm text-ink-gray-5 truncate"
+                    v-html="result.excerpt"
+                  ></div>
+                  <!-- eslint-enable vue/no-v-html -->
                 </div>
-                <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
-                <div
-                  class="text-sm text-ink-gray-5"
-                  v-html="result.excerpt"
-                ></div>
-                <!-- eslint-enable vue/no-v-html -->
+                <Badge
+                  :label="badgeLabel(result)"
+                  theme="gray"
+                  size="sm"
+                  class="shrink-0"
+                />
               </li>
             </ul>
 
@@ -171,6 +179,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { Avatar, Badge } from 'frappe-ui'
 
 let domParser = null
 const LIKELY_HTML_OR_ENTITY_RE = /<[a-zA-Z!/]|&[#a-zA-Z]/
@@ -210,9 +219,11 @@ function routeFor(doctype, name) {
   return fn ? fn(name) : null
 }
 
-// ── Doctype labels ───────────────────────────────────────────────────────────
+// ── Doctype labels — also covers filter-only keys like "Converted Lead",
+// which never appears as a result's own `doctype` (see badgeLabel below) ────
 const DT_LABELS = {
   'CRM Lead': 'Lead',
+  'Converted Lead': 'Converted',
   Lead: 'ERP Lead',
   'CRM Deal': 'Deal',
   Opportunity: 'ERP Deal',
@@ -225,6 +236,14 @@ const DT_LABELS = {
 
 function dtLabel(dt) {
   return DT_LABELS[dt] || dt
+}
+
+// A CRM Lead result carries its own `converted` flag (see search.py) since
+// its doctype is always "CRM Lead" either way — badge it distinctly so a
+// converted lead doesn't look identical to an active one in the list.
+function badgeLabel(result) {
+  if (result.doctype === 'CRM Lead' && result.converted) return 'Converted'
+  return dtLabel(result.doctype)
 }
 
 // ── Doctype filters — which doctypes are searchable, and whether more than
@@ -259,7 +278,7 @@ function fetchFilters() {
   })
     .then((r) => r.json())
     .then((data) => {
-      availableDoctypes.value = data?.message?.doctypes || []
+      availableDoctypes.value = data?.message?.filters || []
       multiSelect.value = !!data?.message?.multi
       // Single-select has no "All" — land on the first filter instead.
       activeDoctypes.value = multiSelect.value
@@ -395,8 +414,19 @@ function mapResults(list) {
     .map((r) => {
       const title =
         r.title || extractTitle(r.content || r.marked_string || '') || r.name
-      const excerpt = r.marked_string || r.content || ''
-      return { title, excerpt, doctype: r.doctype, name: r.name }
+      // Collapse the field-by-field <br> dump into one skimmable line — the
+      // panel shows several rows at once, not a single detailed excerpt.
+      const excerpt = (r.marked_string || r.content || '').replace(
+        /<br>\s*/gi,
+        ' · ',
+      )
+      return {
+        title,
+        excerpt,
+        doctype: r.doctype,
+        name: r.name,
+        converted: !!r.converted,
+      }
     })
     .filter((r) => {
       const key = `${r.doctype}::${r.name}`
