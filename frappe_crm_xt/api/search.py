@@ -55,18 +55,47 @@ def search_link(
 	)
 
 
+# CRM Task was never indexed for global search, so searching it always came
+# back empty — left off rather than offered as a dead filter.
+CRM_SEARCH_DOCTYPES = ["CRM Lead", "CRM Deal", "CRM Organization", "FCRM Note", "Contact"]
+
+
+def _allowed_search_doctypes() -> list[str]:
+	"""CRM_SEARCH_DOCTYPES narrowed to what Global Search Settings actually has
+	indexed (Global Search DocType) and the current user can read, so a doctype
+	only shows up as a search filter when it's genuinely searchable."""
+	from frappe.desk.doctype.global_search_settings.global_search_settings import (
+		get_doctypes_for_global_search,
+	)
+
+	indexed = set(get_doctypes_for_global_search())
+	readable = set(frappe.get_user().get_can_read())
+	return [dt for dt in CRM_SEARCH_DOCTYPES if dt in indexed and dt in readable]
+
+
 @frappe.whitelist()
-def get_search_results(text: str, start: int = 0, limit: int = 10):
+def get_search_filters():
+	"""Doctypes the frontend may offer as filters, plus whether more than one
+	can be picked at once. frappe_search can search several doctypes in a
+	single call; the core frappe.utils.global_search fallback only ever takes
+	one doctype at a time, so the frontend renders a single-select there."""
+	return {
+		"doctypes": _allowed_search_doctypes(),
+		"multi": "frappe_search" in frappe.get_installed_apps(),
+	}
+
+
+@frappe.whitelist()
+def get_search_results(text: str, start: int = 0, limit: int = 10, doctypes: list[str] | None = None):
 	start = int(start)
 	limit = int(limit)
-	allowed_doctypes = [
-		"CRM Lead",
-		"CRM Deal",
-		"CRM Organization",
-		"FCRM Note",
-		"CRM Task",
-		"Contact",
-	]
+	allowed_doctypes = _allowed_search_doctypes()
+
+	if doctypes:
+		unknown = [d for d in doctypes if d not in allowed_doctypes]
+		if unknown:
+			frappe.throw(f"Unknown search filter(s): {', '.join(unknown)}")
+		allowed_doctypes = doctypes
 
 	if "frappe_search" in frappe.get_installed_apps():
 		from frappe_search.api.search import get_global_search_results
@@ -87,7 +116,11 @@ def get_search_results(text: str, start: int = 0, limit: int = 10):
 
 	from frappe.utils.global_search import search as global_search
 
-	raw = global_search(text, start=start, limit=limit + 1) or []
+	# Core global_search only accepts a single doctype. The frontend never
+	# leaves the fallback UI with more than one filter selected, but fall back
+	# to unrestricted rather than guessing if that ever happens.
+	doctype = allowed_doctypes[0] if len(allowed_doctypes) == 1 else ""
+	raw = global_search(text, start=start, limit=limit + 1, doctype=doctype) or []
 
 	has_more = len(raw) > limit
 	results = []
