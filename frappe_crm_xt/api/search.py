@@ -167,14 +167,21 @@ def get_search_results(text: str, start: int = 0, limit: int = 10, doctypes: lis
 			for r in raw
 		]
 
-	if wanted_converted is not None:
-		lead_names = [r["name"] for r in results if r.get("doctype") == LEAD_DOCTYPE]
-		converted_by_name = {
+	# Fetched once, whether or not a specific lead state was requested: also
+	# used to badge each Lead row as Converted/Active in the results list.
+	lead_names = [r["name"] for r in results if r.get("doctype") == LEAD_DOCTYPE]
+	converted_by_name = (
+		{
 			d.name: d.converted
 			for d in frappe.get_all(
 				LEAD_DOCTYPE, filters={"name": ["in", lead_names]}, fields=["name", "converted"]
 			)
 		}
+		if lead_names
+		else {}
+	)
+
+	if wanted_converted is not None:
 		results = [
 			r
 			for r in results
@@ -182,6 +189,8 @@ def get_search_results(text: str, start: int = 0, limit: int = 10, doctypes: lis
 		]
 
 	for r in results:
+		if r.get("doctype") == LEAD_DOCTYPE:
+			r["converted"] = bool(converted_by_name.get(r["name"]))
 		r["marked_string"] = _clean_excerpt(r.get("marked_string") or r.get("name") or "")
 
 	has_more = len(results) > limit
