@@ -114,7 +114,7 @@ def get_search_filters():
 
 
 @frappe.whitelist()
-def get_search_results(text: str, start: int = 0, limit: int = 10, doctypes: list[str] | None = None):
+def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: list[str] | None = None):
 	start = int(start)
 	limit = int(limit)
 	allowed_filters = _allowed_search_filters()

@@ -377,7 +377,7 @@ function doSearch(append) {
     body: JSON.stringify({
       text: query.value,
       start: offset,
-      limit: 10,
+      limit: 20,
       doctypes: activeDoctypes.value.length ? activeDoctypes.value : null,
     }),
   })
@@ -397,7 +397,7 @@ function doSearch(append) {
         ? [...results.value, ...mapResults(list)]
         : mapResults(list)
       activeIdx.value = 0
-      offset += 10
+      offset += 20
     })
     .catch((err) => {
       if (err.name !== 'AbortError') results.value = []
