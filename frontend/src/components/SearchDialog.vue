@@ -113,12 +113,21 @@
                   <div class="text-base text-ink-gray-8 truncate">
                     {{ result.title || result.name }}
                   </div>
-                  <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
                   <div
-                    class="text-sm text-ink-gray-5 truncate"
-                    v-html="result.excerpt"
-                  ></div>
-                  <!-- eslint-enable vue/no-v-html -->
+                    v-for="(field, fi) in result.fields"
+                    :key="fi"
+                    class="flex items-baseline gap-1 text-sm"
+                  >
+                    <span v-if="field.label" class="shrink-0 text-ink-gray-4"
+                      >{{ field.label }}:</span
+                    >
+                    <!-- eslint-disable vue/no-v-html -- server-sanitised field value with <mark> highlights -->
+                    <span
+                      class="truncate text-ink-gray-6"
+                      v-html="field.value"
+                    ></span>
+                    <!-- eslint-enable vue/no-v-html -->
+                  </div>
                 </div>
                 <Badge
                   :label="badgeLabel(result)"
@@ -408,21 +417,31 @@ function doSearch(append) {
 }
 
 // ── Result mapping ───────────────────────────────────────────────────────────
+// Split "Label : value" into parts so the label can be styled separately from
+// the (possibly <mark>-highlighted) value — falls back to a bare value when a
+// line doesn't look like a labelled field.
+function splitField(line) {
+  const i = line.indexOf(':')
+  if (i === -1) return { label: '', value: line }
+  return { label: line.slice(0, i).trim(), value: line.slice(i + 1).trim() }
+}
+
 function mapResults(list) {
   const seen = new Set()
   return list
     .map((r) => {
       const title =
         r.title || extractTitle(r.content || r.marked_string || '') || r.name
-      // Collapse the field-by-field <br> dump into one skimmable line — the
-      // panel shows several rows at once, not a single detailed excerpt.
-      const excerpt = (r.marked_string || r.content || '').replace(
-        /<br>\s*/gi,
-        ' · ',
-      )
+      // One field per line — nothing collapsed or cut off, unlike the raw
+      // "<br>"-joined dump search.py sends.
+      const fields = (r.marked_string || r.content || '')
+        .split(/<br>\s*/gi)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map(splitField)
       return {
         title,
-        excerpt,
+        fields,
         doctype: r.doctype,
         name: r.name,
         converted: !!r.converted,

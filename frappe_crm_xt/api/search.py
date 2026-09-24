@@ -78,7 +78,7 @@ SEARCH_FILTER_DOCTYPES = {
 # its own — the row's title already shows the record, so that's just noise.
 # And the "Converted : 0/1" field, when indexed, is redundant with the CRM
 # Lead / Converted Lead filter and badge. Both get stripped before display.
-LEADING_NAME_FIELD_RE = re.compile(r"^Name\s*:\s*[^<]*(?:<br>\s*)?", re.IGNORECASE)
+LEADING_NAME_FIELD_RE = re.compile(r"^Name\s*:\s*[\s\S]*?(?:<br>\s*|$)", re.IGNORECASE)
 CONVERTED_FIELD_RE = re.compile(r"\s*(?:<br>\s*)?Converted\s*:\s*[01]\b\s*(?:<br>)?", re.IGNORECASE)
 
 
@@ -191,7 +191,13 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 	for r in results:
 		if r.get("doctype") == LEAD_DOCTYPE:
 			r["converted"] = bool(converted_by_name.get(r["name"]))
-		r["marked_string"] = _clean_excerpt(r.get("marked_string") or r.get("name") or "")
+		# `marked_string` is a context-cropped snippet around the match — good for
+		# a one-line preview, but it cuts fields off mid-value. `full_marked_string`
+		# (frappe_search only) is the same field dump, uncropped, so the frontend
+		# can show every indexed field in full instead of a truncated fragment.
+		r["marked_string"] = _clean_excerpt(
+			r.get("full_marked_string") or r.get("marked_string") or r.get("name") or ""
+		)
 
 	has_more = len(results) > limit
 	return results[:limit], has_more
