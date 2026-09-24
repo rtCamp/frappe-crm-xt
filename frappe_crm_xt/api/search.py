@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from itertools import zip_longest
 
 import frappe
 
@@ -137,35 +138,56 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 	wanted_converted = (
 		LEAD_CONVERTED_BY_FILTER[lead_filters_active[0]] if len(lead_filters_active) == 1 else None
 	)
-	# ponytail: fixed 3x overfetch to compensate for the post-filter drop, not
-	# adaptive to the real converted/non-converted ratio — widen it if leads
-	# keep running out before `limit` is reached.
-	fetch_limit = limit * 3 + 1 if wanted_converted is not None else limit + 1
 
-	if "frappe_search" in frappe.get_installed_apps():
+	# One search per doctype, not a single call spanning all of them: both
+	# frappe_search and the core fallback rank-then-LIMIT across every
+	# doctype in one query, so a doctype with few matches (e.g. CRM Deal)
+	# can get crowded out of the result window entirely by one with many
+	# (e.g. CRM Lead), even though both genuinely match. Querying each
+	# doctype on its own budget guarantees every selected doctype gets a
+	# fair shot.
+	# ponytail: `start` is reused as-is for every doctype's query rather than
+	# tracking an independent cursor per doctype, so "Load More" can revisit
+	# or skip a few rows within a doctype once several are mixed together —
+	# fine for a search dropdown, revisit if that's ever actually noticeable.
+	use_frappe_search = "frappe_search" in frappe.get_installed_apps()
+	if use_frappe_search:
 		from frappe_search.api.search import get_global_search_results
-
-		raw = get_global_search_results(
-			text=text, start=start, limit=fetch_limit, allowed_doctypes=real_doctypes
-		)
-		results = list(raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw)
 	else:
 		from frappe.utils.global_search import search as global_search
 
-		# Core global_search only accepts a single doctype. The frontend never
-		# leaves the fallback UI with more than one filter selected, but fall
-		# back to unrestricted rather than guessing if that ever happens.
-		doctype = real_doctypes[0] if len(real_doctypes) == 1 else ""
-		raw = global_search(text, start=start, limit=fetch_limit, doctype=doctype) or []
-		results = [
-			{
-				"doctype": r.get("doctype"),
-				"name": r.get("name"),
-				"title": r.get("title") or r.get("name"),
-				"marked_string": r.get("content") or r.get("name"),
-			}
-			for r in raw
-		]
+	by_doctype = {}
+	for dt in real_doctypes:
+		# ponytail: fixed 3x overfetch to compensate for the lead post-filter
+		# drop below, not adaptive to the real converted/non-converted ratio —
+		# widen it if leads keep running out before `limit` is reached.
+		dt_limit = limit * 3 + 1 if dt == LEAD_DOCTYPE and wanted_converted is not None else limit + 1
+
+		if use_frappe_search:
+			raw = get_global_search_results(
+				text=text, start=start, limit=dt_limit, doctype=dt, allowed_doctypes=[dt]
+			)
+			rows = raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw
+		else:
+			raw = global_search(text, start=start, limit=dt_limit, doctype=dt) or []
+			rows = [
+				{
+					"doctype": r.get("doctype"),
+					"name": r.get("name"),
+					"title": r.get("title") or r.get("name"),
+					"marked_string": r.get("content") or r.get("name"),
+					"score": r.get("rank", 0),
+				}
+				for r in raw
+			]
+		by_doctype[dt] = sorted(rows, key=lambda r: r.get("score", 0), reverse=True)
+
+	# Round-robin across doctypes instead of pooling everything and sorting by
+	# score: fuzzy-match scores land on a handful of common values, so a
+	# global sort-then-truncate lets ties get decided by fetch order — one
+	# doctype could win every tied slot and push an equally-relevant match
+	# from another doctype off the page entirely.
+	results = [r for group in zip_longest(*by_doctype.values()) for r in group if r is not None]
 
 	# Fetched once, whether or not a specific lead state was requested: also
 	# used to badge each Lead row as Converted/Active in the results list.
