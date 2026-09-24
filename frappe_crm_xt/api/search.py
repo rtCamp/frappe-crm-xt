@@ -60,15 +60,9 @@ def search_link(
 
 # CRM Task was never indexed for global search, so searching it always came
 # back empty — left off rather than offered as a dead filter.
-#
-# "Converted Lead" isn't a real doctype — CRM Lead has a `converted` checkbox,
-# so it's modelled as a second filter over the same doctype, split by that
-# value once results come back (the checkbox itself isn't part of the index).
 LEAD_DOCTYPE = "CRM Lead"
-LEAD_CONVERTED_BY_FILTER = {"CRM Lead": 0, "Converted Lead": 1}
 SEARCH_FILTER_DOCTYPES = {
 	"CRM Lead": LEAD_DOCTYPE,
-	"Converted Lead": LEAD_DOCTYPE,
 	"CRM Deal": "CRM Deal",
 	"CRM Organization": "CRM Organization",
 	"FCRM Note": "FCRM Note",
@@ -77,8 +71,8 @@ SEARCH_FILTER_DOCTYPES = {
 
 # frappe_search always prefixes an excerpt with a "Name: <docname>" field of
 # its own — the row's title already shows the record, so that's just noise.
-# And the "Converted : 0/1" field, when indexed, is redundant with the CRM
-# Lead / Converted Lead filter and badge. Both get stripped before display.
+# And the "Converted : 0/1" field, when indexed, is redundant with the
+# Converted badge a Lead result gets below. Both get stripped before display.
 LEADING_NAME_FIELD_RE = re.compile(r"^Name\s*:\s*[\s\S]*?(?:<br>\s*|$)", re.IGNORECASE)
 CONVERTED_FIELD_RE = re.compile(r"\s*(?:<br>\s*)?Converted\s*:\s*[01]\b\s*(?:<br>)?", re.IGNORECASE)
 
@@ -130,15 +124,6 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 
 	real_doctypes = list({SEARCH_FILTER_DOCTYPES[f] for f in active_filters})
 
-	# The converted flag isn't part of the search index, so isolating just one
-	# lead state means overfetching and dropping the wrong-state rows after the
-	# fact. Only pay for that when a specific state is actually requested —
-	# selecting both (or neither) needs no special handling.
-	lead_filters_active = [f for f in active_filters if f in LEAD_CONVERTED_BY_FILTER]
-	wanted_converted = (
-		LEAD_CONVERTED_BY_FILTER[lead_filters_active[0]] if len(lead_filters_active) == 1 else None
-	)
-
 	# One search per doctype, not a single call spanning all of them: both
 	# frappe_search and the core fallback rank-then-LIMIT across every
 	# doctype in one query, so a doctype with few matches (e.g. CRM Deal)
@@ -158,18 +143,13 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 
 	by_doctype = {}
 	for dt in real_doctypes:
-		# ponytail: fixed 3x overfetch to compensate for the lead post-filter
-		# drop below, not adaptive to the real converted/non-converted ratio —
-		# widen it if leads keep running out before `limit` is reached.
-		dt_limit = limit * 3 + 1 if dt == LEAD_DOCTYPE and wanted_converted is not None else limit + 1
-
 		if use_frappe_search:
 			raw = get_global_search_results(
-				text=text, start=start, limit=dt_limit, doctype=dt, allowed_doctypes=[dt]
+				text=text, start=start, limit=limit + 1, doctype=dt, allowed_doctypes=[dt]
 			)
 			rows = raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw
 		else:
-			raw = global_search(text, start=start, limit=dt_limit, doctype=dt) or []
+			raw = global_search(text, start=start, limit=limit + 1, doctype=dt) or []
 			rows = [
 				{
 					"doctype": r.get("doctype"),
@@ -189,8 +169,8 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 	# from another doctype off the page entirely.
 	results = [r for group in zip_longest(*by_doctype.values()) for r in group if r is not None]
 
-	# Fetched once, whether or not a specific lead state was requested: also
-	# used to badge each Lead row as Converted/Active in the results list.
+	# The converted flag isn't part of the search index, so it's looked up
+	# separately here — used to badge each Lead row as Converted/Active.
 	lead_names = [r["name"] for r in results if r.get("doctype") == LEAD_DOCTYPE]
 	converted_by_name = (
 		{
@@ -202,13 +182,6 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 		if lead_names
 		else {}
 	)
-
-	if wanted_converted is not None:
-		results = [
-			r
-			for r in results
-			if r.get("doctype") != LEAD_DOCTYPE or converted_by_name.get(r["name"]) == wanted_converted
-		]
 
 	for r in results:
 		if r.get("doctype") == LEAD_DOCTYPE:

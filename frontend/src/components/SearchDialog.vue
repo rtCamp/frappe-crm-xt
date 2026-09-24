@@ -228,11 +228,9 @@ function routeFor(doctype, name) {
   return fn ? fn(name) : null
 }
 
-// ── Doctype labels — also covers filter-only keys like "Converted Lead",
-// which never appears as a result's own `doctype` (see badgeLabel below) ────
+// ── Doctype labels ───────────────────────────────────────────────────────────
 const DT_LABELS = {
   'CRM Lead': 'Lead',
-  'Converted Lead': 'Converted',
   Lead: 'ERP Lead',
   'CRM Deal': 'Deal',
   Opportunity: 'ERP Deal',
