@@ -245,16 +245,14 @@ function dtLabel(dt) {
   return DT_LABELS[dt] || dt
 }
 
-// A CRM Lead result carries its own `converted` flag (see search.py) since
-// its doctype is always "CRM Lead" either way — badge it distinctly so a
-// converted lead doesn't look identical to an active one in the list.
+// A Lead result carries its own `converted` flag (see search.py), so it can
+// be badged distinctly from an active lead.
 function badgeLabel(result) {
   if (result.doctype === 'CRM Lead' && result.converted) return 'Converted'
   return dtLabel(result.doctype)
 }
 
-// ── Doctype filters — which doctypes are searchable, and whether more than
-// one can be picked at once (frappe_search: yes; core global_search: no) ────
+// ── Doctype filters ──────────────────────────────────────────────────────────
 const availableDoctypes = ref([])
 const multiSelect = ref(true)
 const activeDoctypes = ref([])
@@ -415,9 +413,7 @@ function doSearch(append) {
 }
 
 // ── Result mapping ───────────────────────────────────────────────────────────
-// Split "Label : value" into parts so the label can be styled separately from
-// the (possibly <mark>-highlighted) value — falls back to a bare value when a
-// line doesn't look like a labelled field.
+// Splits "Label : value" so the label can be styled separately from the value.
 function splitField(line) {
   const i = line.indexOf(':')
   if (i === -1) return { label: '', value: line }
@@ -430,8 +426,7 @@ function mapResults(list) {
     .map((r) => {
       const title =
         r.title || extractTitle(r.content || r.marked_string || '') || r.name
-      // One field per line — nothing collapsed or cut off, unlike the raw
-      // "<br>"-joined dump search.py sends.
+      // One field per line — nothing collapsed or cut off.
       const fields = (r.marked_string || r.content || '')
         .split(/<br>\s*/gi)
         .map((line) => line.trim())
