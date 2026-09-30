@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from itertools import zip_longest
 
 import frappe
 
@@ -58,8 +57,7 @@ def search_link(
 	)
 
 
-# CRM Task was never indexed for global search, so searching it always came
-# back empty — left off rather than offered as a dead filter.
+# CRM Task was never indexed for global search, so it always came back empty.
 LEAD_DOCTYPE = "CRM Lead"
 SEARCH_FILTER_DOCTYPES = {
 	"CRM Lead": LEAD_DOCTYPE,
@@ -69,10 +67,8 @@ SEARCH_FILTER_DOCTYPES = {
 	"Contact": "Contact",
 }
 
-# frappe_search always prefixes an excerpt with a "Name: <docname>" field of
-# its own — the row's title already shows the record, so that's just noise.
-# And the "Converted : 0/1" field, when indexed, is redundant with the
-# Converted badge a Lead result gets below. Both get stripped before display.
+# Strips the redundant leading "Name: <docname>" field and the raw
+# "Converted : 0/1" field (already shown as a badge) out of an excerpt.
 LEADING_NAME_FIELD_RE = re.compile(r"^Name\s*:\s*[\s\S]*?(?:<br>\s*|$)", re.IGNORECASE)
 CONVERTED_FIELD_RE = re.compile(r"\s*(?:<br>\s*)?Converted\s*:\s*[01]\b\s*(?:<br>)?", re.IGNORECASE)
 
@@ -84,9 +80,8 @@ def _clean_excerpt(text: str) -> str:
 
 
 def _allowed_search_filters() -> list[str]:
-	"""SEARCH_FILTER_DOCTYPES narrowed to what Global Search Settings actually
-	has indexed (Global Search DocType) and the current user can read, so a
-	filter only shows up when its underlying doctype is genuinely searchable."""
+	"""SEARCH_FILTER_DOCTYPES narrowed to what's indexed in Global Search
+	Settings and readable by the current user."""
 	from frappe.desk.doctype.global_search_settings.global_search_settings import (
 		get_doctypes_for_global_search,
 	)
@@ -99,9 +94,7 @@ def _allowed_search_filters() -> list[str]:
 @frappe.whitelist()
 def get_search_filters():
 	"""Filter keys the frontend may offer, plus whether more than one can be
-	picked at once. frappe_search can search several doctypes in a single
-	call; the core frappe.utils.global_search fallback only ever takes one
-	doctype at a time, so the frontend renders a single-select there."""
+	picked at once (only frappe_search supports multi-doctype search)."""
 	return {
 		"filters": _allowed_search_filters(),
 		"multi": "frappe_search" in frappe.get_installed_apps(),
@@ -124,53 +117,32 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 
 	real_doctypes = list({SEARCH_FILTER_DOCTYPES[f] for f in active_filters})
 
-	# One search per doctype, not a single call spanning all of them: both
-	# frappe_search and the core fallback rank-then-LIMIT across every
-	# doctype in one query, so a doctype with few matches (e.g. CRM Deal)
-	# can get crowded out of the result window entirely by one with many
-	# (e.g. CRM Lead), even though both genuinely match. Querying each
-	# doctype on its own budget guarantees every selected doctype gets a
-	# fair shot.
-	# ponytail: `start` is reused as-is for every doctype's query rather than
-	# tracking an independent cursor per doctype, so "Load More" can revisit
-	# or skip a few rows within a doctype once several are mixed together —
-	# fine for a search dropdown, revisit if that's ever actually noticeable.
-	use_frappe_search = "frappe_search" in frappe.get_installed_apps()
-	if use_frappe_search:
+	if "frappe_search" in frappe.get_installed_apps():
 		from frappe_search.api.search import get_global_search_results
+
+		raw = get_global_search_results(
+			text=text, start=start, limit=limit + 1, allowed_doctypes=real_doctypes
+		)
+		results = list(raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw)
 	else:
 		from frappe.utils.global_search import search as global_search
 
-	by_doctype = {}
-	for dt in real_doctypes:
-		if use_frappe_search:
-			raw = get_global_search_results(
-				text=text, start=start, limit=limit + 1, doctype=dt, allowed_doctypes=[dt]
-			)
-			rows = raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw
-		else:
-			raw = global_search(text, start=start, limit=limit + 1, doctype=dt) or []
-			rows = [
-				{
-					"doctype": r.get("doctype"),
-					"name": r.get("name"),
-					"title": r.get("title") or r.get("name"),
-					"marked_string": r.get("content") or r.get("name"),
-					"score": r.get("rank", 0),
-				}
-				for r in raw
-			]
-		by_doctype[dt] = sorted(rows, key=lambda r: r.get("score", 0), reverse=True)
+		# Core global_search only accepts a single doctype. The frontend never
+		# leaves the fallback UI with more than one filter selected, but fall
+		# back to unrestricted rather than guessing if that ever happens.
+		doctype = real_doctypes[0] if len(real_doctypes) == 1 else ""
+		raw = global_search(text, start=start, limit=limit + 1, doctype=doctype) or []
+		results = [
+			{
+				"doctype": r.get("doctype"),
+				"name": r.get("name"),
+				"title": r.get("title") or r.get("name"),
+				"marked_string": r.get("content") or r.get("name"),
+			}
+			for r in raw
+		]
 
-	# Round-robin across doctypes instead of pooling everything and sorting by
-	# score: fuzzy-match scores land on a handful of common values, so a
-	# global sort-then-truncate lets ties get decided by fetch order — one
-	# doctype could win every tied slot and push an equally-relevant match
-	# from another doctype off the page entirely.
-	results = [r for group in zip_longest(*by_doctype.values()) for r in group if r is not None]
-
-	# The converted flag isn't part of the search index, so it's looked up
-	# separately here — used to badge each Lead row as Converted/Active.
+	# The converted flag isn't part of the search index — badges each Lead row.
 	lead_names = [r["name"] for r in results if r.get("doctype") == LEAD_DOCTYPE]
 	converted_by_name = (
 		{
@@ -186,10 +158,7 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 	for r in results:
 		if r.get("doctype") == LEAD_DOCTYPE:
 			r["converted"] = bool(converted_by_name.get(r["name"]))
-		# `marked_string` is a context-cropped snippet around the match — good for
-		# a one-line preview, but it cuts fields off mid-value. `full_marked_string`
-		# (frappe_search only) is the same field dump, uncropped, so the frontend
-		# can show every indexed field in full instead of a truncated fragment.
+		# full_marked_string (frappe_search only) is uncropped, unlike marked_string.
 		r["marked_string"] = _clean_excerpt(
 			r.get("full_marked_string") or r.get("marked_string") or r.get("name") or ""
 		)
