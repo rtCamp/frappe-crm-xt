@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 import frappe
 
 # Frappe's search_link defaults to 10 rows; the CRM Link control never sends a
@@ -67,16 +65,24 @@ SEARCH_FILTER_DOCTYPES = {
 	"Contact": "Contact",
 }
 
-# Strips the redundant leading "Name: <docname>" field and the raw
-# "Converted : 0/1" field (already shown as a badge) out of an excerpt.
-LEADING_NAME_FIELD_RE = re.compile(r"^Name\s*:\s*[\s\S]*?(?:<br>\s*|$)", re.IGNORECASE)
-CONVERTED_FIELD_RE = re.compile(r"\s*(?:<br>\s*)?Converted\s*:\s*[01]\b\s*(?:<br>)?", re.IGNORECASE)
+
+def _strip_mark(text: str) -> str:
+	return text.replace("<mark>", "").replace("</mark>", "")
 
 
 def _clean_excerpt(text: str) -> str:
-	text = LEADING_NAME_FIELD_RE.sub("", text)
-	text = CONVERTED_FIELD_RE.sub(" ", text)
-	return text.strip()
+	"""Drop the leading "Name: <docname>" field and any "Converted : 0/1"
+	field (already shown as a badge) — labels are compared with <mark>
+	stripped, since frappe_search highlights a match anywhere, including
+	inside a field's own label, e.g. "<mark>Converted</mark> : 1"."""
+	segments = [s.strip() for s in text.split("<br>")]
+	kept = []
+	for i, seg in enumerate(segments):
+		label = _strip_mark(seg).split(":", 1)[0].strip().lower()
+		if (i == 0 and label == "name") or label == "converted":
+			continue
+		kept.append(seg)
+	return " <br> ".join(kept).strip()
 
 
 def _allowed_search_filters() -> list[str]:
