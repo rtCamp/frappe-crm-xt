@@ -66,6 +66,7 @@
               v-if="multiSelect"
               type="button"
               class="rounded px-2 py-1 text-xs transition-colors"
+              :aria-pressed="activeDoctypes.length === 0"
               :class="
                 activeDoctypes.length === 0
                   ? 'bg-surface-gray-3 text-ink-gray-9'
@@ -80,6 +81,7 @@
               :key="dt"
               type="button"
               class="rounded px-2 py-1 text-xs transition-colors"
+              :aria-pressed="isDoctypeActive(dt)"
               :class="
                 isDoctypeActive(dt)
                   ? 'bg-surface-gray-3 text-ink-gray-9'
@@ -289,6 +291,9 @@ function fetchFilters() {
       activeDoctypes.value = multiSelect.value
         ? []
         : availableDoctypes.value.slice(0, 1)
+      // A fast typist can already have searched (unfiltered) before this
+      // resolves — rerun so results match the filter it just landed on.
+      if (props.show && query.value) doSearch(false)
     })
     .catch(() => {})
 }
