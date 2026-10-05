@@ -419,10 +419,18 @@ function doSearch(append) {
 
 // ── Result mapping ───────────────────────────────────────────────────────────
 // Splits "Label : value" so the label can be styled separately from the value.
+// The label is rendered as plain text (not v-html), but frappe_search can
+// highlight a match inside the label itself (e.g. searching "email" produces
+// "<mark>Email</mark> : ..."), so strip any mark tags there — the value keeps
+// them, since it's rendered with v-html for the highlight to actually show.
 function splitField(line) {
   const i = line.indexOf(':')
   if (i === -1) return { label: '', value: line }
-  return { label: line.slice(0, i).trim(), value: line.slice(i + 1).trim() }
+  const label = line
+    .slice(0, i)
+    .trim()
+    .replace(/<\/?mark>/g, '')
+  return { label, value: line.slice(i + 1).trim() }
 }
 
 function mapResults(list) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import frappe
+from frappe import _
 
 # Frappe's search_link defaults to 10 rows; the CRM Link control never sends a
 # page_length, so dropdowns top out at 10. Bump the default to 20 — the most the
@@ -55,15 +56,9 @@ def search_link(
 	)
 
 
-# CRM Task was never indexed for global search, so it always came back empty.
 LEAD_DOCTYPE = "CRM Lead"
-SEARCH_FILTER_DOCTYPES = {
-	"CRM Lead": LEAD_DOCTYPE,
-	"CRM Deal": "CRM Deal",
-	"CRM Organization": "CRM Organization",
-	"FCRM Note": "FCRM Note",
-	"Contact": "Contact",
-}
+# CRM Task was never indexed for global search, so it always came back empty.
+SEARCH_FILTER_DOCTYPES = [LEAD_DOCTYPE, "CRM Deal", "CRM Organization", "FCRM Note", "Contact"]
 
 
 def _strip_mark(text: str) -> str:
@@ -94,7 +89,7 @@ def _allowed_search_filters() -> list[str]:
 
 	indexed = set(get_doctypes_for_global_search())
 	readable = set(frappe.get_user().get_can_read())
-	return [f for f, dt in SEARCH_FILTER_DOCTYPES.items() if dt in indexed and dt in readable]
+	return [dt for dt in SEARCH_FILTER_DOCTYPES if dt in indexed and dt in readable]
 
 
 @frappe.whitelist()
@@ -116,20 +111,28 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 	if doctypes:
 		unknown = [f for f in doctypes if f not in allowed_filters]
 		if unknown:
-			frappe.throw(f"Unknown search filter(s): {', '.join(unknown)}")
+			frappe.throw(_("Unknown search filter(s): {0}").format(", ".join(unknown)))
 		active_filters = doctypes
 	else:
 		active_filters = allowed_filters
 
-	real_doctypes = list({SEARCH_FILTER_DOCTYPES[f] for f in active_filters})
+	# active_filters doubles as the real doctype list — no indirection needed
+	# now that every filter key is its own doctype's name.
+	real_doctypes = active_filters
 
 	if "frappe_search" in frappe.get_installed_apps():
 		from frappe_search.api.search import get_global_search_results
 
-		raw = get_global_search_results(
-			text=text, start=start, limit=limit + 1, allowed_doctypes=real_doctypes
+		# frappe_search filters by fuzzy score, exists() and has_permission()
+		# *after* its own SQL LIMIT, so an overfetch-by-one here wouldn't
+		# reliably signal "more pages exist" — trust its own has_more instead.
+		# It also stays the actual `limit` so successive pages' lookahead
+		# queries land on the same (start, limit) cache key as the next
+		# page's primary query, instead of always missing the cache by one.
+		raw = get_global_search_results(text=text, start=start, limit=limit, allowed_doctypes=real_doctypes)
+		results, has_more = (
+			(raw[0], raw[1]) if (isinstance(raw, list | tuple) and len(raw) == 2) else (raw, False)
 		)
-		results = list(raw[0] if (isinstance(raw, list | tuple) and len(raw) == 2) else raw)
 	else:
 		from frappe.utils.global_search import search as global_search
 
@@ -138,12 +141,18 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 		# back to unrestricted rather than guessing if that ever happens.
 		doctype = real_doctypes[0] if len(real_doctypes) == 1 else ""
 		raw = global_search(text, start=start, limit=limit + 1, doctype=doctype) or []
+		has_more = len(raw) > limit
+		raw = raw[:limit]
 		results = [
 			{
 				"doctype": r.get("doctype"),
 				"name": r.get("name"),
 				"title": r.get("title") or r.get("name"),
-				"marked_string": r.get("content") or r.get("name"),
+				# Core content is "|||"-joined, not "<br>" — _clean_excerpt and
+				# the frontend both split on "<br>", so without this a fallback
+				# row renders as one field: label the first value, the rest
+				# squashed into it.
+				"marked_string": (r.get("content") or r.get("name") or "").replace("|||", "<br>"),
 			}
 			for r in raw
 		]
@@ -169,5 +178,4 @@ def get_search_results(text: str, start: int = 0, limit: int = 20, doctypes: lis
 			r.get("full_marked_string") or r.get("marked_string") or r.get("name") or ""
 		)
 
-	has_more = len(results) > limit
-	return results[:limit], has_more
+	return results, has_more
