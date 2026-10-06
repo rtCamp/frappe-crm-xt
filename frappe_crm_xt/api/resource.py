@@ -13,14 +13,13 @@ def get_data(
 	filters: str | dict | list | None = None,
 	or_filters: str | dict | list | None = None,
 	order_by: str | None = None,
-	limit_start: int = 0,
-	limit_page_length: int = 20,
-	as_list: bool = False,
+	start: int = 0,
+	limit: int = 20,
 ):
 	if doctype not in ALLOWED_DOCTYPES:
 		frappe.throw(_("Doctype {0} is not allowed").format(doctype), frappe.PermissionError)
 
-	frappe.only_for_roles("Marketing bot")
+	frappe.only_for("Marketing bot")
 
 	return frappe.get_list(
 		doctype,
@@ -28,8 +27,7 @@ def get_data(
 		filters=frappe.parse_json(filters) if filters else None,
 		or_filters=frappe.parse_json(or_filters) if or_filters else None,
 		order_by=order_by,
-		limit_start=limit_start,
-		limit=limit_page_length,
-		as_list=as_list,
+		start=start,
+		limit=limit,
 		ignore_permissions=True,
 	)
