@@ -21,7 +21,7 @@ def get_data(
 
 	frappe.only_for("Marketing bot")
 
-	return frappe.get_list(
+	return frappe.get_all(
 		doctype,
 		fields=frappe.parse_json(fields) if fields else ["name"],
 		filters=frappe.parse_json(filters) if filters else None,
@@ -29,5 +29,4 @@ def get_data(
 		order_by=order_by,
 		start=start,
 		limit=limit,
-		ignore_permissions=True,
 	)
