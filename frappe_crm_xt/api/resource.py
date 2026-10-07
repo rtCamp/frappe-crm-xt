@@ -29,4 +29,5 @@ def get_data(
 		order_by=order_by,
 		start=start,
 		limit=limit,
+		ignore_permissions=True,
 	)
