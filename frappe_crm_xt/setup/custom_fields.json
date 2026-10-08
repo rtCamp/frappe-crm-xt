@@ -138,10 +138,16 @@
       "insert_after": "closed_date"
     },
     {
+      "fieldname": "custom_sow_sheet_link",
+      "fieldtype": "Data",
+      "label": "SOW Sheet Link",
+      "insert_after": "custom_drive_folder_link"
+    },
+    {
       "fieldname": "custom_slack_channel_link",
       "fieldtype": "Data",
       "label": "Slack Channel Link",
-      "insert_after": "custom_drive_folder_link"
+      "insert_after": "custom_sow_sheet_link"
     },
     {
       "fieldname": "custom_timezone",
