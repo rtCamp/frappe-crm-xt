@@ -272,9 +272,9 @@
     },
     {
       "fieldname": "custom_service_type",
-      "fieldtype": "Link",
+      "fieldtype": "Table MultiSelect",
       "label": "Service Type",
-      "options": "Service Type",
+      "options": "CRM Service Type",
       "insert_after": "custom_project_details"
     },
     {
@@ -890,6 +890,13 @@
       "options": "CRM Deal",
       "insert_after": "project_name",
       "read_only": 1
+    },
+    {
+      "fieldname": "custom_service_type",
+      "fieldtype": "Table MultiSelect",
+      "label": "Service Type",
+      "options": "CRM Service Type",
+      "insert_after": "custom_deal"
     }
   ],
   "Sales Stage": [

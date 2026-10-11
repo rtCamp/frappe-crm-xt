@@ -32,7 +32,6 @@ def before_save(doc, method=None):
 
 	if doc.status != current_status:
 		create_checklist(doc, field="status", value=doc.status)
-		_auto_create_project_on_won(doc)
 	if doc.sales_stage != current_stage:
 		create_checklist(doc, field="sales_stage", value=doc.sales_stage)
 		add_stage_change_log(doc)
@@ -171,6 +170,7 @@ REQUIRED_DEAL_FIELDS_FOR_PROJECT: tuple[str, ...] = (
 )
 
 
+# Can be used if required
 def _auto_create_project_on_won(doc):
 	if doc.status != "Won":
 		return
@@ -184,6 +184,9 @@ def _auto_create_project_on_won(doc):
 def _create_project(deal) -> str:
 	values = {"doctype": "Project", "status": "Open", "custom_deal": deal.name}
 	for deal_field, project_field in DEAL_TO_PROJECT_FIELD_MAP.items():
+		if deal_field == "custom_service_type":
+			values[project_field] = [{"service_type": row.service_type} for row in deal.get(deal_field) or []]
+			continue
 		values[project_field] = deal.get(deal_field)
 
 	base_name = deal.get("organization_name") or deal.name
