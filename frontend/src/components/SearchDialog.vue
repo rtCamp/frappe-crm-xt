@@ -57,15 +57,51 @@
             </div>
           </div>
 
+          <!-- ── Doctype filters ── -->
+          <div
+            v-if="availableDoctypes.length"
+            class="flex items-center gap-1 px-4 pb-3 flex-wrap"
+          >
+            <button
+              v-if="multiSelect"
+              type="button"
+              class="rounded px-2 py-1 text-xs transition-colors"
+              :aria-pressed="activeDoctypes.length === 0"
+              :class="
+                activeDoctypes.length === 0
+                  ? 'bg-surface-gray-3 text-ink-gray-9'
+                  : 'bg-surface-gray-1 text-ink-gray-5 hover:bg-surface-gray-2'
+              "
+              @click="selectAll"
+            >
+              All
+            </button>
+            <button
+              v-for="dt in availableDoctypes"
+              :key="dt"
+              type="button"
+              class="rounded px-2 py-1 text-xs transition-colors"
+              :aria-pressed="isDoctypeActive(dt)"
+              :class="
+                isDoctypeActive(dt)
+                  ? 'bg-surface-gray-3 text-ink-gray-9'
+                  : 'bg-surface-gray-1 text-ink-gray-5 hover:bg-surface-gray-2'
+              "
+              @click="toggleDoctype(dt)"
+            >
+              {{ dtLabel(dt) }}
+            </button>
+          </div>
+
           <hr />
 
           <!-- ── Results ── -->
-          <div class="p-4 max-h-96 overflow-y-auto">
-            <ul v-if="results.length" class="divide-y divide-gray-200">
+          <div class="p-2 max-h-96 overflow-y-auto">
+            <ul v-if="results.length" class="flex flex-col gap-0.5">
               <li
                 v-for="(result, i) in results"
                 :key="result.doctype + '::' + result.name"
-                class="py-2 px-2 cursor-pointer rounded"
+                class="flex items-center gap-3 py-2 px-2 cursor-pointer rounded-lg"
                 :class="
                   activeIdx === i
                     ? 'bg-surface-gray-2'
@@ -74,16 +110,33 @@
                 @click="selectResult(result)"
                 @mouseenter="activeIdx = i"
               >
-                <div class="text-base text-ink-gray-8">
-                  {{ dtLabel(result.doctype) }} :
-                  {{ result.title || result.name }}
+                <Avatar :label="result.title || result.name" size="lg" />
+                <div class="min-w-0 flex-1 text-left">
+                  <div class="text-base text-ink-gray-8 truncate">
+                    {{ result.title || result.name }}
+                  </div>
+                  <div
+                    v-for="(field, fi) in result.fields"
+                    :key="fi"
+                    class="flex items-baseline gap-1 text-sm"
+                  >
+                    <span v-if="field.label" class="shrink-0 text-ink-gray-4"
+                      >{{ field.label }}:</span
+                    >
+                    <!-- eslint-disable vue/no-v-html -- server-sanitised field value with <mark> highlights -->
+                    <span
+                      class="truncate text-ink-gray-6"
+                      v-html="field.value"
+                    ></span>
+                    <!-- eslint-enable vue/no-v-html -->
+                  </div>
                 </div>
-                <!-- eslint-disable vue/no-v-html -- server-sanitised excerpt with <mark> highlights -->
-                <div
-                  class="text-sm text-ink-gray-5"
-                  v-html="result.excerpt"
-                ></div>
-                <!-- eslint-enable vue/no-v-html -->
+                <Badge
+                  :label="badgeLabel(result)"
+                  theme="gray"
+                  size="sm"
+                  class="shrink-0"
+                />
               </li>
             </ul>
 
@@ -137,6 +190,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { Avatar, Badge } from 'frappe-ui'
 
 let domParser = null
 const LIKELY_HTML_OR_ENTITY_RE = /<[a-zA-Z!/]|&[#a-zA-Z]/
@@ -168,7 +222,6 @@ const ROUTES = {
     path: `/crm/organizations/${encodeURIComponent(n)}`,
   }),
   'FCRM Note': () => ({ path: `/crm/notes/view/list` }),
-  'CRM Task': () => ({ path: `/crm/tasks/view/list` }),
   'CRM Call Log': () => ({ path: `/crm/call-logs/view/list` }),
 }
 
@@ -186,13 +239,63 @@ const DT_LABELS = {
   Contact: 'Contact',
   'CRM Organization': 'Org',
   'FCRM Note': 'Note',
-  'CRM Task': 'Task',
   Event: 'Calendar',
   'CRM Call Log': 'Call',
 }
 
 function dtLabel(dt) {
   return DT_LABELS[dt] || dt
+}
+
+// A Lead result carries its own `converted` flag (see search.py), so it can
+// be badged distinctly from an active lead.
+function badgeLabel(result) {
+  if (result.doctype === 'CRM Lead' && result.converted) return 'Converted'
+  return dtLabel(result.doctype)
+}
+
+// ── Doctype filters ──────────────────────────────────────────────────────────
+const availableDoctypes = ref([])
+const multiSelect = ref(true)
+const activeDoctypes = ref([])
+
+function isDoctypeActive(dt) {
+  return activeDoctypes.value.includes(dt)
+}
+
+function selectAll() {
+  activeDoctypes.value = []
+  doSearch(false)
+}
+
+function toggleDoctype(dt) {
+  activeDoctypes.value = multiSelect.value
+    ? activeDoctypes.value.includes(dt)
+      ? activeDoctypes.value.filter((d) => d !== dt)
+      : [...activeDoctypes.value, dt]
+    : [dt]
+  doSearch(false)
+}
+
+function fetchFilters() {
+  fetch('/api/method/frappe_crm_xt.api.search.get_search_filters', {
+    method: 'GET',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      availableDoctypes.value = data?.message?.filters || []
+      multiSelect.value = !!data?.message?.multi
+      // Single-select has no "All" — land on the first filter instead.
+      activeDoctypes.value = multiSelect.value
+        ? []
+        : availableDoctypes.value.slice(0, 1)
+      // A fast typist can already have searched (unfiltered) before this
+      // resolves — rerun so results match the filter it just landed on.
+      if (props.show && query.value) doSearch(false)
+    })
+    .catch(() => {})
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -204,6 +307,7 @@ watch(
       results.value = []
       hasMore.value = false
       activeIdx.value = 0
+      fetchFilters()
       nextTick(() => inputRef.value?.focus())
     }
   },
@@ -280,7 +384,12 @@ function doSearch(append) {
       'X-Frappe-CSRF-Token': getCsrfToken(),
       Accept: 'application/json',
     },
-    body: JSON.stringify({ text: query.value, start: offset, limit: 10 }),
+    body: JSON.stringify({
+      text: query.value,
+      start: offset,
+      limit: 20,
+      doctypes: activeDoctypes.value.length ? activeDoctypes.value : null,
+    }),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -298,7 +407,7 @@ function doSearch(append) {
         ? [...results.value, ...mapResults(list)]
         : mapResults(list)
       activeIdx.value = 0
-      offset += 10
+      offset += 20
     })
     .catch((err) => {
       if (err.name !== 'AbortError') results.value = []
@@ -309,14 +418,40 @@ function doSearch(append) {
 }
 
 // ── Result mapping ───────────────────────────────────────────────────────────
+// Splits "Label : value" so the label can be styled separately from the value.
+// The label is rendered as plain text (not v-html), but frappe_search can
+// highlight a match inside the label itself (e.g. searching "email" produces
+// "<mark>Email</mark> : ..."), so strip any mark tags there — the value keeps
+// them, since it's rendered with v-html for the highlight to actually show.
+function splitField(line) {
+  const i = line.indexOf(':')
+  if (i === -1) return { label: '', value: line }
+  const label = line
+    .slice(0, i)
+    .trim()
+    .replace(/<\/?mark>/g, '')
+  return { label, value: line.slice(i + 1).trim() }
+}
+
 function mapResults(list) {
   const seen = new Set()
   return list
     .map((r) => {
       const title =
         r.title || extractTitle(r.content || r.marked_string || '') || r.name
-      const excerpt = r.marked_string || r.content || ''
-      return { title, excerpt, doctype: r.doctype, name: r.name }
+      // One field per line — nothing collapsed or cut off.
+      const fields = (r.marked_string || r.content || '')
+        .split(/<br>\s*/gi)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map(splitField)
+      return {
+        title,
+        fields,
+        doctype: r.doctype,
+        name: r.name,
+        converted: !!r.converted,
+      }
     })
     .filter((r) => {
       const key = `${r.doctype}::${r.name}`
