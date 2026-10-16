@@ -178,6 +178,8 @@ def _auto_create_project_on_won(doc):
 		return
 	if any(not doc.get(f) for f in REQUIRED_DEAL_FIELDS_FOR_PROJECT):
 		return
+	if doc.meta.has_field("tech_stack") and not doc.tech_stack:
+		return
 	_create_project(doc)
 
 
