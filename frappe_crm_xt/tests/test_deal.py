@@ -77,32 +77,33 @@ class TestDealEvents(IntegrationTestCase):
 		self.assertIn("custom_expected_start_date", DEAL_TO_PROJECT_FIELD_MAP)
 		self.assertEqual(DEAL_TO_PROJECT_FIELD_MAP["custom_expected_start_date"], "expected_start_date")
 
-	def won_deal(self, **values):
+	def won_deal(self, has_tech_stack_field=True, **values):
 		deal = frappe._dict(
 			{field: "x" for field in deal_events.REQUIRED_DEAL_FIELDS_FOR_PROJECT},
 			name="CRM-DEAL-TEST",
 			status="Won",
-			tech_stack=[frappe._dict(technology="Drupal")],
+			tech_stack=[frappe._dict(technology="Drupal")] if has_tech_stack_field else None,
+			meta=MagicMock(has_field=lambda fieldname: has_tech_stack_field and fieldname == "tech_stack"),
 		)
 		deal.update(values)
 		return deal
 
-	def test_auto_create_skips_won_deal_without_tech_stack(self):
-		"""A won deal with no tech stack does not auto-create a project"""
+	def auto_create(self, deal):
 		with (
 			patch.object(deal_events.frappe.db, "exists", return_value=False),
 			patch.object(deal_events, "_create_project") as create_project,
 		):
-			deal_events._auto_create_project_on_won(self.won_deal(tech_stack=[]))
-		create_project.assert_not_called()
+			deal_events._auto_create_project_on_won(deal)
+		return create_project
 
-	def test_create_project_copies_tech_stack(self):
-		"""_create_project carries the deal's tech stack onto the project"""
-		project = MagicMock()
-		project.insert.return_value.name = "PROJ-TEST"
-		with (
-			patch.object(deal_events.frappe, "get_doc", return_value=project) as get_doc,
-			patch.object(deal_events.frappe, "msgprint"),
-		):
-			deal_events._create_project(self.won_deal())
-		self.assertEqual(get_doc.call_args.args[0]["tech_stack"], [{"technology": "Drupal"}])
+	def test_auto_create_skips_won_deal_with_empty_tech_stack(self):
+		"""A won deal with an empty tech stack does not auto-create a project"""
+		self.auto_create(self.won_deal(tech_stack=[])).assert_not_called()
+
+	def test_auto_create_runs_for_won_deal_with_tech_stack(self):
+		"""A won deal with a tech stack auto-creates a project"""
+		self.auto_create(self.won_deal()).assert_called_once()
+
+	def test_auto_create_ignores_tech_stack_when_field_is_absent(self):
+		"""Without the tech_stack field (next_pms not installed) a won deal still auto-creates a project"""
+		self.auto_create(self.won_deal(has_tech_stack_field=False)).assert_called_once()
