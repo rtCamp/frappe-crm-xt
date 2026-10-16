@@ -23,7 +23,7 @@ jobs:
       - name: Create a new minimal bench
         run: |
           cd /home/frappe
-          su frappe bash -c "bench init frappe-bench --skip-redis-config-generation --no-procfile --skip-assets"
+          su frappe bash -c "bench init frappe-bench --frappe-branch v16.51.1 --skip-redis-config-generation --no-procfile --skip-assets"
 
       - name: Get Dependent Apps
         run: |
@@ -40,7 +40,7 @@ jobs:
           rm -rf app_repo
           for dep in $DEPS; do
             if [ "$dep" = "crm" ]; then
-              su frappe bash -c "bench get-app $dep --branch main"
+              su frappe bash -c "bench get-app $dep --branch v1.87.0"
             else
               su frappe bash -c "bench get-app $dep"
             fi
