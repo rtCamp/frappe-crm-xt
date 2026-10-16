@@ -168,6 +168,7 @@ REQUIRED_DEAL_FIELDS_FOR_PROJECT: tuple[str, ...] = (
 	"custom_current_host",
 	"custom_deal_type",
 	"custom_description",
+	"tech_stack",
 )
 
 
@@ -185,6 +186,7 @@ def _create_project(deal) -> str:
 	values = {"doctype": "Project", "status": "Open", "custom_deal": deal.name}
 	for deal_field, project_field in DEAL_TO_PROJECT_FIELD_MAP.items():
 		values[project_field] = deal.get(deal_field)
+	values["tech_stack"] = [{"technology": row.technology} for row in deal.tech_stack]
 
 	base_name = deal.get("organization_name") or deal.name
 	values["project_name"] = f"{base_name} - {deal.name}"

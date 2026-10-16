@@ -340,10 +340,17 @@
       "insert_after": "custom_previous_cms"
     },
     {
+      "fieldname": "tech_stack",
+      "fieldtype": "Table MultiSelect",
+      "label": "Tech Stack",
+      "options": "Tech Stack Item",
+      "insert_after": "custom_current_host"
+    },
+    {
       "fieldname": "custom_section_break_mnjqa",
       "fieldtype": "Section Break",
       "label": "Description",
-      "insert_after": "custom_current_host"
+      "insert_after": "tech_stack"
     },
     {
       "fieldname": "custom_description",
