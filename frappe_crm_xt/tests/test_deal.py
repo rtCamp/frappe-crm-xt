@@ -1,9 +1,12 @@
 # Copyright (c) 2025, rtCamp and contributors
 # For license information, please see license.txt
 
+from unittest.mock import MagicMock, patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from frappe_crm_xt.doc_events import deal as deal_events
 from frappe_crm_xt.doc_events.deal import create_checklist, validate, validate_probability
 
 
@@ -73,3 +76,34 @@ class TestDealEvents(IntegrationTestCase):
 
 		self.assertIn("custom_expected_start_date", DEAL_TO_PROJECT_FIELD_MAP)
 		self.assertEqual(DEAL_TO_PROJECT_FIELD_MAP["custom_expected_start_date"], "expected_start_date")
+
+	def won_deal(self, has_tech_stack_field=True, **values):
+		deal = frappe._dict(
+			{field: "x" for field in deal_events.REQUIRED_DEAL_FIELDS_FOR_PROJECT},
+			name="CRM-DEAL-TEST",
+			status="Won",
+			tech_stack=[frappe._dict(technology="Drupal")] if has_tech_stack_field else None,
+			meta=MagicMock(has_field=lambda fieldname: has_tech_stack_field and fieldname == "tech_stack"),
+		)
+		deal.update(values)
+		return deal
+
+	def auto_create(self, deal):
+		with (
+			patch.object(deal_events.frappe.db, "exists", return_value=False),
+			patch.object(deal_events, "_create_project") as create_project,
+		):
+			deal_events._auto_create_project_on_won(deal)
+		return create_project
+
+	def test_auto_create_skips_won_deal_with_empty_tech_stack(self):
+		"""A won deal with an empty tech stack does not auto-create a project"""
+		self.auto_create(self.won_deal(tech_stack=[])).assert_not_called()
+
+	def test_auto_create_runs_for_won_deal_with_tech_stack(self):
+		"""A won deal with a tech stack auto-creates a project"""
+		self.auto_create(self.won_deal()).assert_called_once()
+
+	def test_auto_create_ignores_tech_stack_when_field_is_absent(self):
+		"""Without the tech_stack field (next_pms not installed) a won deal still auto-creates a project"""
+		self.auto_create(self.won_deal(has_tech_stack_field=False)).assert_called_once()
