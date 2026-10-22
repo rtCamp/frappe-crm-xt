@@ -1,4 +1,6 @@
 import frappe
+from frappe.query_builder import Case
+from frappe.query_builder.functions import Count, Max
 
 
 def _collect_emails(doctype: str, docname: str) -> list[str]:
@@ -32,38 +34,96 @@ def search_candidate_threads(doctype: str, docname: str):
 	if not emails:
 		return []
 
-	like_clauses = []
-	params: list = []
-	for e in emails:
-		like_clauses += ["e.sender = %s", "e.recipients LIKE %s", "e.cc LIKE %s"]
-		params += [e, f"%{e}%", f"%{e}%"]
-
 	user = frappe.session.user
-	rows = frappe.db.sql(
-		f"""
-		SELECT
+	t = frappe.qb.DocType("Gmail Thread")
+	e = frappe.qb.DocType("Single Email CT")
+	ga = frappe.qb.DocType("Gmail Account")
+
+	match = None
+	for addr in emails:
+		cond = (e.sender == addr) | e.recipients.like(f"%{addr}%") | e.cc.like(f"%{addr}%")
+		match = cond if match is None else (match | cond)
+
+	linked_filter = (
+		t.reference_name.isnull()
+		| (t.reference_name == "")
+		| ((t.reference_doctype == doctype) & (t.reference_name == docname))
+	)
+
+	last_email_on = Max(e.creation).as_("last_email_on")
+	rows = (
+		frappe.qb.from_(t)
+		.inner_join(e)
+		.on(e.parent == t.name)
+		.left_join(ga)
+		.on(ga.name == t.gmail_account)
+		.select(
 			t.name,
 			t.subject_of_first_mail,
 			t.gmail_thread_id,
 			t.reference_doctype,
 			t.reference_name,
-			MAX(e.creation) AS last_email_on,
-			COUNT(e.name) AS num_emails,
-			(ga.linked_user = %s) AS can_open_gmail
-		FROM `tabGmail Thread` t
-		JOIN `tabSingle Email CT` e ON e.parent = t.name
-		LEFT JOIN `tabGmail Account` ga ON ga.name = t.gmail_account
-		WHERE ({" OR ".join(like_clauses)})
-		  AND (t.reference_name IS NULL OR t.reference_name = ''
-		       OR (t.reference_doctype = %s AND t.reference_name = %s))
-		GROUP BY t.name
-		ORDER BY last_email_on DESC
-		LIMIT 50
-		""",
-		(user, *params, doctype, docname),
-		as_dict=True,
-	)
+			last_email_on,
+			Count(e.name).as_("num_emails"),
+			Case().when(ga.linked_user == user, 1).else_(0).as_("can_open_gmail"),
+		)
+		.where(match & linked_filter)
+		.groupby(t.name)
+		.orderby(Max(e.creation), order=frappe.qb.desc)
+		.limit(50)
+	).run(as_dict=True)
 	return [r for r in rows if frappe.has_permission("Gmail Thread", "read", doc=r["name"])]
+
+
+@frappe.whitelist()
+def search_by_subject(query: str, doctype: str, docname: str):
+	"""Explicit subject search across Gmail Threads unlinked or linked here,
+	regardless of the record's emails. Shape matches search_candidate_threads."""
+	query = (query or "").strip()
+	if not query or doctype not in ("CRM Lead", "CRM Deal"):
+		return []
+	frappe.has_permission(doctype, "read", doc=docname, throw=True)
+
+	like = f"%{query}%"
+	# get_list applies Gmail Thread read permission, so no per-row check is needed.
+	threads = frappe.get_list(
+		"Gmail Thread",
+		fields=[
+			"name",
+			"subject_of_first_mail",
+			"gmail_thread_id",
+			"reference_doctype",
+			"reference_name",
+			"gmail_account",
+		],
+		or_filters=[["subject_of_first_mail", "like", like]],
+		order_by="modified desc",
+		limit_page_length=50,
+		distinct=True,
+	)
+	if not threads:
+		return []
+
+	stats = {
+		r.parent: r
+		for r in frappe.get_all(
+			"Single Email CT",
+			filters={"parent": ["in", [t.name for t in threads]]},
+			fields=[
+				"parent",
+				{"COUNT": "name", "as": "num_emails"},
+				{"MAX": "creation", "as": "last_email_on"},
+			],
+			group_by="parent",
+		)
+	}
+	own_account = frappe.get_value("Gmail Account", {"linked_user": frappe.session.user})
+	for t in threads:
+		t["num_emails"] = stats[t.name].num_emails if t.name in stats else 0
+		t["last_email_on"] = stats[t.name].last_email_on if t.name in stats else None
+		account = t.pop("gmail_account")
+		t["can_open_gmail"] = int(bool(own_account) and account == own_account)
+	return threads
 
 
 @frappe.whitelist()
