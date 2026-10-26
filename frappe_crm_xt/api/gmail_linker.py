@@ -132,7 +132,11 @@ def search_candidate_threads(doctype: str, docname: str):
 		return []
 
 	thread_names = _matching_thread_names(_collect_email_addresses(doctype, docname))
-	unlinked_or_here = _get_threads({"name": ["in", thread_names], "reference_name": ["in", ["", docname]]})
+	unlinked_or_here = (
+		_get_threads({"name": ["in", thread_names], "reference_name": ["in", ["", docname]]})
+		if thread_names
+		else []
+	)
 	linked_here = _get_threads({"reference_doctype": doctype, "reference_name": docname})
 	# Already-linked threads stay listed even if they no longer match the record's email addresses.
 	threads_by_name = {thread.name: thread for thread in unlinked_or_here + linked_here}
@@ -156,8 +160,7 @@ def get_thread_preview(name: str):
 	"""Preview: subject + last few emails with sanitized HTML body and
 	compacted recipients. HTML is sanitized server-side so the frontend can
 	render it directly."""
-	frappe.has_permission("Gmail Thread", "read", doc=name, throw=True)
-	thread = frappe.get_doc("Gmail Thread", name)
+	thread = frappe.get_doc("Gmail Thread", name, check_permission="read")
 	emails = []
 	for email in (thread.emails or [])[-10:]:
 		emails.append(
