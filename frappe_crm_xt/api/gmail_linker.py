@@ -64,7 +64,9 @@ def _matching_thread_names(email_addresses: list[str]) -> list[str]:
 
 def _has_email_address(email_addresses: list[str], text: str) -> bool:
 	"""True if any of `email_addresses` appears as a whole address (LIKE alone matches a@x.com inside na@x.com)."""
-	pattern = r"(?<![\w.+-])(?:%s)(?![\w-]|\.\w)" % "|".join(map(re.escape, email_addresses))
+	pattern = r"(?<![\w.+-])(?:%s)(?![\w-]|\.\w)" % "|".join(
+		re.escape(email_address) for email_address in email_addresses
+	)
 	return re.search(pattern, text, re.I) is not None
 
 
