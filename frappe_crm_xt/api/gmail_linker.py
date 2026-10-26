@@ -1,26 +1,25 @@
+import re
 from datetime import datetime
 
 import frappe
+from frappe.utils import add_days, now_datetime
+from pypika.terms import Criterion
 
 
-def _collect_emails(doctype: str, docname: str) -> list[str]:
-	doc = frappe.get_doc(doctype, docname)
-	emails: set[str] = set()
-	if getattr(doc, "email", None):
-		emails.add(doc.email.strip().lower())
-	for row in getattr(doc, "contacts", []) or []:
-		if getattr(row, "email", None):
-			emails.add(row.email.strip().lower())
-	return [e for e in emails if e]
+def _collect_email_addresses(doctype: str, docname: str) -> list[str]:
+	"""Email addresses of the record and of its contacts, lowercased."""
+	record = frappe.get_doc(doctype, docname)
+	people = [record, *(record.get("contacts") or [])]
+	return list({(person.get("email") or "").strip().lower() for person in people} - {""})
 
 
-def _short_recipients(raw: str | None, keep: int = 3) -> str:
-	if not raw:
+def _short_recipients(raw_recipients: str | None, keep: int = 3) -> str:
+	if not raw_recipients:
 		return ""
-	parts = [p.strip() for p in raw.replace("\n", ",").split(",") if p.strip()]
-	if len(parts) <= keep:
-		return ", ".join(parts)
-	return ", ".join(parts[:keep]) + f" +{len(parts) - keep} more"
+	recipients = [r.strip() for r in raw_recipients.replace("\n", ",").split(",") if r.strip()]
+	if len(recipients) <= keep:
+		return ", ".join(recipients)
+	return ", ".join(recipients[:keep]) + f" +{len(recipients) - keep} more"
 
 
 THREAD_FIELDS = [
@@ -29,30 +28,53 @@ THREAD_FIELDS = [
 	"gmail_thread_id",
 	"reference_doctype",
 	"reference_name",
-	"gmail_account",
 ]
 MAX_THREADS = 20
 
 
-def _matching_thread_ids(emails: list[str]) -> list[str]:
-	e = frappe.qb.DocType("Single Email CT")
-	match = None
-	for addr in emails:
-		cond = (e.sender == addr) | e.recipients.like(f"%{addr}%") | e.cc.like(f"%{addr}%")
-		match = cond if match is None else (match | cond)
-	return frappe.qb.from_(e).select(e.parent).distinct().where(match).run(pluck=True)
+def _matching_thread_names(email_addresses: list[str]) -> list[str]:
+	"""Names of recent Gmail Threads where one of `email_addresses` is sender/recipient/cc as a whole address."""
+	if not email_addresses:
+		return []
+	single_email = frappe.qb.DocType("Single Email CT")
+	involves_email_address = Criterion.any(
+		[
+			(single_email.sender == email_address)
+			| single_email.recipients.like(f"%{email_address}%")
+			| single_email.cc.like(f"%{email_address}%")
+			for email_address in email_addresses
+		]
+	)
+	recent_emails = (
+		frappe.qb.from_(single_email)
+		.select(single_email.parent, single_email.sender, single_email.recipients, single_email.cc)
+		.where(involves_email_address & (single_email.date_and_time >= add_days(now_datetime(), -365)))
+		.orderby(single_email.date_and_time, order=frappe.qb.desc)
+		.limit(500)
+		.run(as_dict=True)
+	)
+	return list(
+		{
+			email.parent
+			for email in recent_emails
+			if _has_email_address(email_addresses, f"{email.sender} {email.recipients} {email.cc}")
+		}
+	)
+
+
+def _has_email_address(email_addresses: list[str], text: str) -> bool:
+	"""True if any of `email_addresses` appears as a whole address (LIKE alone matches a@x.com inside na@x.com)."""
+	pattern = r"(?<![\w.+-])(?:%s)(?![\w-]|\.\w)" % "|".join(map(re.escape, email_addresses))
+	return re.search(pattern, text, re.I) is not None
 
 
 def _with_thread_stats(threads: list[dict]) -> list[dict]:
-	"""Add whole-thread message count and last message time, the Gmail button flag, newest first."""
-	if not threads:
-		return []
-
-	stats = {
-		r.parent: r
-		for r in frappe.get_all(
+	"""Add whole-thread message count and last message time, newest first."""
+	stats_by_thread = {
+		stats.parent: stats
+		for stats in frappe.get_all(
 			"Single Email CT",
-			filters={"parent": ["in", [t.name for t in threads]]},
+			filters={"parent": ["in", [thread.name for thread in threads]]},
 			fields=[
 				"parent",
 				{"COUNT": "name", "as": "num_emails"},
@@ -61,55 +83,62 @@ def _with_thread_stats(threads: list[dict]) -> list[dict]:
 			group_by="parent",
 		)
 	}
-	own_account = frappe.get_value("Gmail Account", {"linked_user": frappe.session.user})
-	for t in threads:
-		stat = stats.get(t.name)
-		t["num_emails"] = stat.num_emails if stat else 0
-		t["last_email_on"] = stat.last_email_on if stat else None
-		account = t.pop("gmail_account")
-		t["can_open_gmail"] = int(bool(own_account) and account == own_account)
-	return sorted(threads, key=lambda t: t["last_email_on"] or datetime.min, reverse=True)[:MAX_THREADS]
+	for thread in threads:
+		stats = stats_by_thread.get(thread.name) or frappe._dict(num_emails=0, last_email_on=None)
+		thread.update(num_emails=stats.num_emails, last_email_on=stats.last_email_on)
+	return sorted(threads, key=lambda thread: thread["last_email_on"] or datetime.min, reverse=True)[
+		:MAX_THREADS
+	]
 
 
 def _get_threads(filters: dict) -> list[dict]:
-	# get_list applies Gmail Thread read permission in SQL, so the limit is applied after it.
+	# get_list applies Gmail Thread read permission in SQL. Over-fetch candidates;
+	# _with_thread_stats sorts by last email and trims to MAX_THREADS.
 	return frappe.get_list(
 		"Gmail Thread",
 		fields=THREAD_FIELDS,
 		filters=filters,
 		order_by="modified desc",
-		limit_page_length=MAX_THREADS,
+		limit_page_length=200,
 	)
+
+
+def _can_read(doctype: str, docname: str) -> bool:
+	"""Only CRM Lead/Deal are supported; raises if the user can't read the record."""
+	if doctype not in ("CRM Lead", "CRM Deal"):
+		return False
+	frappe.has_permission(doctype, "read", doc=docname, throw=True)
+	return True
+
+
+@frappe.whitelist()
+def is_available() -> bool:
+	return "frappe_gmail_thread" in frappe.get_installed_apps()
 
 
 @frappe.whitelist()
 def search_candidate_threads(doctype: str, docname: str):
 	"""Threads involving any of this record's emails that are unlinked or linked to this record."""
-	if doctype not in ["CRM Lead", "CRM Deal"]:
+	if not _can_read(doctype, docname):
 		return []
 
-	frappe.has_permission(doctype, "read", doc=docname, throw=True)
-
-	emails = _collect_emails(doctype, docname)
-	ids = _matching_thread_ids(emails) if emails else []
-	if not ids:
-		return []
-
-	return _with_thread_stats(_get_threads({"name": ["in", ids], "reference_name": ["in", ["", docname]]}))
+	thread_names = _matching_thread_names(_collect_email_addresses(doctype, docname))
+	unlinked_or_here = _get_threads({"name": ["in", thread_names], "reference_name": ["in", ["", docname]]})
+	linked_here = _get_threads({"reference_doctype": doctype, "reference_name": docname})
+	# Already-linked threads stay listed even if they no longer match the record's email addresses.
+	threads_by_name = {thread.name: thread for thread in unlinked_or_here + linked_here}
+	return _with_thread_stats(list(threads_by_name.values()))
 
 
 @frappe.whitelist()
 def search_by_subject(query: str, doctype: str, docname: str):
 	"""Explicit subject search across Gmail Threads unlinked or linked here,
 	regardless of the record's emails. Shape matches search_candidate_threads."""
-	query = (query or "").strip()
-	if not query or doctype not in ("CRM Lead", "CRM Deal"):
+	query = query.strip()
+	if not query or not _can_read(doctype, docname):
 		return []
-	frappe.has_permission(doctype, "read", doc=docname, throw=True)
 
-	threads = _get_threads(
-		{"subject_of_first_mail": ["like", f"%{query}%"], "reference_name": ["in", ["", docname]]}
-	)
+	threads = _get_threads({"all_subjects": ["like", f"%{query}%"], "reference_name": ["in", ["", docname]]})
 	return _with_thread_stats(threads)
 
 
@@ -121,16 +150,16 @@ def get_thread_preview(name: str):
 	frappe.has_permission("Gmail Thread", "read", doc=name, throw=True)
 	thread = frappe.get_doc("Gmail Thread", name)
 	emails = []
-	for e in (thread.emails or [])[-10:]:
+	for email in (thread.emails or [])[-10:]:
 		emails.append(
 			{
-				"sender": e.sender,
-				"sender_full_name": e.sender_full_name,
-				"recipients_short": _short_recipients(e.recipients),
-				"subject": e.subject,
-				"creation": e.date_and_time,
-				"html": frappe.utils.sanitize_html(e.content or ""),
-				"sent_or_received": e.sent_or_received,
+				"sender": email.sender,
+				"sender_full_name": email.sender_full_name,
+				"recipients_short": _short_recipients(email.recipients),
+				"subject": email.subject,
+				"creation": email.date_and_time,
+				"html": frappe.utils.sanitize_html(email.content or ""),
+				"sent_or_received": email.sent_or_received,
 			}
 		)
 	return {
