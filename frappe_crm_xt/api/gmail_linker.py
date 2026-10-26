@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from email.utils import getaddresses
 
 import frappe
 from frappe.utils import add_days, now_datetime
@@ -16,7 +17,11 @@ def _collect_email_addresses(doctype: str, docname: str) -> list[str]:
 def _short_recipients(raw_recipients: str | None, keep: int = 3) -> str:
 	if not raw_recipients:
 		return ""
-	recipients = [r.strip() for r in raw_recipients.replace("\n", ",").split(",") if r.strip()]
+	recipients = [
+		email_address
+		for _, email_address in getaddresses([raw_recipients.replace("\n", ",")])
+		if email_address
+	]
 	if len(recipients) <= keep:
 		return ", ".join(recipients)
 	return ", ".join(recipients[:keep]) + f" +{len(recipients) - keep} more"
@@ -25,7 +30,6 @@ def _short_recipients(raw_recipients: str | None, keep: int = 3) -> str:
 THREAD_FIELDS = [
 	"name",
 	"subject_of_first_mail",
-	"gmail_thread_id",
 	"reference_doctype",
 	"reference_name",
 ]
@@ -72,6 +76,9 @@ def _has_email_address(email_addresses: list[str], text: str) -> bool:
 
 def _with_thread_stats(threads: list[dict]) -> list[dict]:
 	"""Add whole-thread message count and last message time, newest first."""
+	if not threads:
+		return []
+
 	stats_by_thread = {
 		stats.parent: stats
 		for stats in frappe.get_all(
@@ -167,6 +174,5 @@ def get_thread_preview(name: str):
 	return {
 		"name": thread.name,
 		"subject": thread.subject_of_first_mail,
-		"gmail_thread_id": thread.gmail_thread_id,
 		"emails": emails,
 	}
