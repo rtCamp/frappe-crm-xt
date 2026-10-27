@@ -12,6 +12,7 @@ from frappe_crm_xt.utils.gmail_thread import link_gmail_threads
 
 def validate(doc, method=None):
 	validate_probability(doc)
+	validate_project(doc)
 
 
 def validate_probability(doc):
@@ -19,6 +20,23 @@ def validate_probability(doc):
 	if probability < 0 or probability > 100:
 		frappe.throw(
 			_("Probability must be between 0 and 100 (got {0}).").format(probability),
+			frappe.ValidationError,
+		)
+
+
+def validate_project(doc):
+	"""The optional linked Project must belong to a Customer of the deal's organization."""
+	if not (doc.get("custom_project") and doc.get("organization")):
+		return
+	customer = frappe.db.get_value("Project", doc.custom_project, "customer")
+	if (
+		not customer
+		or frappe.db.get_value("Customer", customer, "custom_crm_organization") != doc.organization
+	):
+		frappe.throw(
+			_("Project {0} does not belong to organization {1}.").format(
+				doc.custom_project, doc.organization
+			),
 			frappe.ValidationError,
 		)
 
