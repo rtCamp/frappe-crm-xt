@@ -26,7 +26,9 @@ def validate_probability(doc):
 
 def validate_project(doc):
 	"""The optional linked Project must belong to a Customer of the deal's organization."""
-	if not (doc.get("custom_project") and doc.get("organization")):
+	if not doc.get("custom_project"):
+		return
+	if not (doc.has_value_changed("custom_project") or doc.has_value_changed("organization")):
 		return
 	customer = frappe.db.get_value("Project", doc.custom_project, "customer")
 	if (
@@ -41,7 +43,15 @@ def validate_project(doc):
 		)
 
 
+def link_customer_to_organization(doc):
+	"""FCRM creates the Customer on Won without its CRM Organization; record the pairing."""
+	customer, organization = doc.get("erpnext_customer"), doc.get("organization")
+	if customer and organization and not frappe.db.get_value("Customer", customer, "custom_crm_organization"):
+		frappe.db.set_value("Customer", customer, "custom_crm_organization", organization)
+
+
 def before_save(doc, method=None):
+	link_customer_to_organization(doc)
 	current_status = frappe.db.get_value("CRM Deal", doc.name, "status")
 	current_stage = frappe.db.get_value("CRM Deal", doc.name, "sales_stage")
 	if not current_status and not current_stage:
@@ -216,4 +226,5 @@ def _create_project(deal) -> str:
 		alert=True,
 		indicator="green",
 	)
+	deal.custom_project = project.name
 	return project.name
