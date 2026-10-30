@@ -107,3 +107,33 @@ class TestDealEvents(IntegrationTestCase):
 	def test_auto_create_ignores_tech_stack_when_field_is_absent(self):
 		"""Without the tech_stack field (next_pms not installed) a won deal still auto-creates a project"""
 		self.auto_create(self.won_deal(has_tech_stack_field=False)).assert_called_once()
+
+
+class TestValidateProject(IntegrationTestCase):
+	def run_validate(self, customer_org, **values):
+		doc = frappe._dict(custom_project="PROJ-1", organization="Org A", has_value_changed=lambda f: True)
+		doc.update(values)
+		with patch.object(
+			deal_events.frappe.db,
+			"get_value",
+			side_effect=lambda dt, *a, **k: "CUST-1" if dt == "Project" else customer_org,
+		):
+			deal_events.validate_project(doc)
+
+	def test_project_of_same_organization_is_accepted(self):
+		"""A Project whose Customer belongs to the deal's organization passes"""
+		self.run_validate("Org A")
+
+	def test_project_of_other_organization_is_rejected(self):
+		"""A Project whose Customer belongs to another organization is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate("Org B")
+
+	def test_cleared_organization_with_project_is_rejected(self):
+		"""Clearing the organization while keeping a Project is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate("Org A", organization=None)
+
+	def test_no_project_skips_validation(self):
+		"""A deal without a Project is not checked"""
+		self.run_validate("Org B", custom_project=None)
