@@ -43,15 +43,23 @@ def validate_project(doc):
 		)
 
 
+def on_update(doc, method=None):
+	link_customer_to_organization(doc)
+
+
 def link_customer_to_organization(doc):
-	"""FCRM creates the Customer on Won without its CRM Organization; record the pairing."""
-	customer, organization = doc.get("erpnext_customer"), doc.get("organization")
+	"""FCRM creates (or reuses) the Customer on Won without its CRM Organization; record the pairing.
+
+	Runs after FCRM's own on_update, which sets erpnext_customer via db.set_value — so read it
+	from the database, not the in-memory doc.
+	"""
+	organization = doc.get("organization")
+	customer = frappe.db.get_value("CRM Deal", doc.name, "erpnext_customer")
 	if customer and organization and not frappe.db.get_value("Customer", customer, "custom_crm_organization"):
 		frappe.db.set_value("Customer", customer, "custom_crm_organization", organization)
 
 
 def before_save(doc, method=None):
-	link_customer_to_organization(doc)
 	current_status = frappe.db.get_value("CRM Deal", doc.name, "status")
 	current_stage = frappe.db.get_value("CRM Deal", doc.name, "sales_stage")
 	if not current_status and not current_stage:
