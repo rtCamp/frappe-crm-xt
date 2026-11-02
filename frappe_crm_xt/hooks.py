@@ -20,6 +20,8 @@ doc_events = {
 		"validate": "frappe_crm_xt.doc_events.deal.validate",
 		"before_save": "frappe_crm_xt.doc_events.deal.before_save",
 		"after_insert": "frappe_crm_xt.doc_events.deal.after_insert",
+		# After FCRM's on_update, which creates the ERPNext Customer on Won.
+		"on_update": "frappe_crm_xt.doc_events.deal.on_update",
 		"on_trash": "frappe_crm_xt.doc_events.lead_deal_delete.on_trash",
 	},
 	"CRM Task": {
