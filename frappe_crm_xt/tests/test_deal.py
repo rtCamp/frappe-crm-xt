@@ -113,10 +113,18 @@ class TestValidateProject(IntegrationTestCase):
 	def run_validate(self, customer_org, customer="CUST-1", **values):
 		doc = frappe._dict(custom_project="PROJ-1", organization="Org A", has_value_changed=lambda f: True)
 		doc.update(values)
-		with patch.object(
-			deal_events.frappe.db,
-			"get_value",
-			side_effect=lambda dt, *a, **k: customer if dt == "Project" else customer_org,
+
+		# Mimics MariaDB's case-insensitive name match.
+		def exists(dt, filters):
+			return customer if customer and customer.lower() == filters["name"].lower() else None
+
+		with (
+			patch.object(
+				deal_events.frappe.db,
+				"get_value",
+				side_effect=lambda dt, *a, **k: customer if dt == "Project" else customer_org,
+			),
+			patch.object(deal_events.frappe.db, "exists", side_effect=exists),
 		):
 			deal_events.validate_project(doc)
 
@@ -137,6 +145,10 @@ class TestValidateProject(IntegrationTestCase):
 	def test_unlinked_customer_named_after_organization_is_accepted(self):
 		"""An unlinked Customer whose name is the organization's counts as that organization's"""
 		self.run_validate(None, customer="Org A")
+
+	def test_unlinked_customer_name_match_ignores_case(self):
+		"""Case differences don't reject what the dropdown (MariaDB, case-insensitive) offered"""
+		self.run_validate(None, customer="org a")
 
 	def test_unlinked_customer_with_other_name_is_rejected(self):
 		"""An unlinked Customer with any other name is rejected"""
