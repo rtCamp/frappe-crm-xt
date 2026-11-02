@@ -12,6 +12,7 @@ from frappe_crm_xt.utils.gmail_thread import link_gmail_threads
 
 def validate(doc, method=None):
 	validate_probability(doc)
+	validate_project(doc)
 
 
 def validate_probability(doc):
@@ -21,6 +22,46 @@ def validate_probability(doc):
 			_("Probability must be between 0 and 100 (got {0}).").format(probability),
 			frappe.ValidationError,
 		)
+
+
+def validate_project(doc):
+	"""The optional linked Project must belong to a Customer of the deal's organization."""
+	if not doc.get("custom_project"):
+		return
+	if not (doc.has_value_changed("custom_project") or doc.has_value_changed("organization")):
+		return
+	customer = frappe.db.get_value("Project", doc.custom_project, "customer")
+	linked_org = customer and frappe.db.get_value("Customer", customer, "custom_crm_organization")
+	# Unlinked Customer named after the organization — FCRM names the Customer it creates this way.
+	# Matched in the DB so case/trailing-space rules equal the dropdown's `customer in [org]` filter.
+	belongs = linked_org == doc.organization or (
+		not linked_org and customer and frappe.db.exists("Customer", {"name": doc.organization}) == customer
+	)
+	if not (customer and doc.organization and belongs):
+		frappe.throw(
+			_("Project {0} does not belong to organization {1}.").format(
+				doc.custom_project, doc.organization
+			),
+			frappe.ValidationError,
+		)
+
+
+def on_update(doc, method=None):
+	link_customer_to_organization(doc)
+
+
+def link_customer_to_organization(doc):
+	"""FCRM creates (or reuses) the Customer on Won without its CRM Organization; record the pairing.
+
+	Runs after FCRM's own on_update, which sets erpnext_customer via db.set_value — so read it
+	from the database, not the in-memory doc.
+	"""
+	organization = doc.get("organization")
+	if not organization:
+		return
+	customer = frappe.db.get_value("CRM Deal", doc.name, "erpnext_customer")
+	if customer and not frappe.db.get_value("Customer", customer, "custom_crm_organization"):
+		frappe.db.set_value("Customer", customer, "custom_crm_organization", organization)
 
 
 def before_save(doc, method=None):
@@ -198,4 +239,5 @@ def _create_project(deal) -> str:
 		alert=True,
 		indicator="green",
 	)
+	deal.custom_project = project.name
 	return project.name

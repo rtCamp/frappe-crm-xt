@@ -4,7 +4,7 @@
       "fieldname": "custom_pipeline",
       "fieldtype": "Data",
       "label": "Pipeline",
-      "default":"Inbound",
+      "default": "Inbound",
       "insert_after": "next_step",
       "translatable": 1
     },
@@ -27,7 +27,7 @@
       "fieldtype": "Link",
       "label": "Sales Stage",
       "options": "Sales Stage",
-      "default":"Prospecting",
+      "default": "Prospecting",
       "insert_after": "custom_priority"
     },
     {
@@ -421,6 +421,13 @@
       "label": "Stage Change Log",
       "options": "CRM Stage Change Log",
       "insert_after": "status_change_log"
+    },
+    {
+      "fieldname": "custom_project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "Project",
+      "insert_after": "organization"
     }
   ],
   "CRM Task": [
@@ -652,10 +659,10 @@
       "read_only": 1
     },
     {
-      "fieldname":"custom_drive_folder_link",
-      "fieldtype":"Data",
-      "label":"Drive Folder Link",
-      "insert_after":"custom_account_manager"
+      "fieldname": "custom_drive_folder_link",
+      "fieldtype": "Data",
+      "label": "Drive Folder Link",
+      "insert_after": "custom_account_manager"
     }
   ],
   "CRM Organization": [
