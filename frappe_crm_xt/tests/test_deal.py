@@ -110,13 +110,13 @@ class TestDealEvents(IntegrationTestCase):
 
 
 class TestValidateProject(IntegrationTestCase):
-	def run_validate(self, customer_org, **values):
+	def run_validate(self, customer_org, customer="CUST-1", **values):
 		doc = frappe._dict(custom_project="PROJ-1", organization="Org A", has_value_changed=lambda f: True)
 		doc.update(values)
 		with patch.object(
 			deal_events.frappe.db,
 			"get_value",
-			side_effect=lambda dt, *a, **k: "CUST-1" if dt == "Project" else customer_org,
+			side_effect=lambda dt, *a, **k: customer if dt == "Project" else customer_org,
 		):
 			deal_events.validate_project(doc)
 
@@ -133,6 +133,20 @@ class TestValidateProject(IntegrationTestCase):
 		"""Clearing the organization while keeping a Project is rejected"""
 		with self.assertRaises(frappe.ValidationError):
 			self.run_validate("Org A", organization=None)
+
+	def test_unlinked_customer_named_after_organization_is_accepted(self):
+		"""An unlinked Customer whose name is the organization's counts as that organization's"""
+		self.run_validate(None, customer="Org A")
+
+	def test_unlinked_customer_with_other_name_is_rejected(self):
+		"""An unlinked Customer with any other name is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate(None)
+
+	def test_project_without_customer_is_rejected(self):
+		"""A Project with no Customer is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate(None, customer=None)
 
 	def test_no_project_skips_validation(self):
 		"""A deal without a Project is not checked"""
