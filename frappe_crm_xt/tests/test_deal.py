@@ -107,3 +107,79 @@ class TestDealEvents(IntegrationTestCase):
 	def test_auto_create_ignores_tech_stack_when_field_is_absent(self):
 		"""Without the tech_stack field (next_pms not installed) a won deal still auto-creates a project"""
 		self.auto_create(self.won_deal(has_tech_stack_field=False)).assert_called_once()
+
+
+class TestValidateProject(IntegrationTestCase):
+	def run_validate(self, customer_org, customer="CUST-1", **values):
+		doc = frappe._dict(custom_project="PROJ-1", organization="Org A", has_value_changed=lambda f: True)
+		doc.update(values)
+
+		# Mimics MariaDB's case-insensitive name match.
+		def exists(dt, filters):
+			return customer if customer and customer.lower() == filters["name"].lower() else None
+
+		with (
+			patch.object(
+				deal_events.frappe.db,
+				"get_value",
+				side_effect=lambda dt, *a, **k: customer if dt == "Project" else customer_org,
+			),
+			patch.object(deal_events.frappe.db, "exists", side_effect=exists),
+		):
+			deal_events.validate_project(doc)
+
+	def test_project_of_same_organization_is_accepted(self):
+		"""A Project whose Customer belongs to the deal's organization passes"""
+		self.run_validate("Org A")
+
+	def test_project_of_other_organization_is_rejected(self):
+		"""A Project whose Customer belongs to another organization is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate("Org B")
+
+	def test_cleared_organization_with_project_is_rejected(self):
+		"""Clearing the organization while keeping a Project is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate("Org A", organization=None)
+
+	def test_unlinked_customer_named_after_organization_is_accepted(self):
+		"""An unlinked Customer whose name is the organization's counts as that organization's"""
+		self.run_validate(None, customer="Org A")
+
+	def test_unlinked_customer_name_match_ignores_case(self):
+		"""Case differences don't reject what the dropdown (MariaDB, case-insensitive) offered"""
+		self.run_validate(None, customer="org a")
+
+	def test_unlinked_customer_with_other_name_is_rejected(self):
+		"""An unlinked Customer with any other name is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate(None)
+
+	def test_project_without_customer_is_rejected(self):
+		"""A Project with no Customer is rejected"""
+		with self.assertRaises(frappe.ValidationError):
+			self.run_validate(None, customer=None)
+
+	def test_no_project_skips_validation(self):
+		"""A deal without a Project is not checked"""
+		self.run_validate("Org B", custom_project=None)
+
+
+class TestLinkCustomerToOrganization(IntegrationTestCase):
+	def run_link(self, linked_org):
+		doc = frappe._dict(name="DEAL-1", organization="Org A")
+		values = {"CRM Deal": "CUST-1", "Customer": linked_org}
+		with (
+			patch.object(deal_events.frappe.db, "get_value", side_effect=lambda dt, *a, **k: values[dt]),
+			patch.object(deal_events.frappe.db, "set_value") as set_value,
+		):
+			deal_events.link_customer_to_organization(doc)
+		return set_value
+
+	def test_unlinked_customer_gets_deal_organization(self):
+		"""The Customer FCRM created on Won is linked to the deal's organization"""
+		self.run_link(None).assert_called_once_with("Customer", "CUST-1", "custom_crm_organization", "Org A")
+
+	def test_linked_customer_is_not_overwritten(self):
+		"""A Customer already linked to an organization keeps it"""
+		self.run_link("Org B").assert_not_called()
