@@ -137,3 +137,23 @@ class TestValidateProject(IntegrationTestCase):
 	def test_no_project_skips_validation(self):
 		"""A deal without a Project is not checked"""
 		self.run_validate("Org B", custom_project=None)
+
+
+class TestLinkCustomerToOrganization(IntegrationTestCase):
+	def run_link(self, linked_org):
+		doc = frappe._dict(name="DEAL-1", organization="Org A")
+		values = {"CRM Deal": "CUST-1", "Customer": linked_org}
+		with (
+			patch.object(deal_events.frappe.db, "get_value", side_effect=lambda dt, *a, **k: values[dt]),
+			patch.object(deal_events.frappe.db, "set_value") as set_value,
+		):
+			deal_events.link_customer_to_organization(doc)
+		return set_value
+
+	def test_unlinked_customer_gets_deal_organization(self):
+		"""The Customer FCRM created on Won is linked to the deal's organization"""
+		self.run_link(None).assert_called_once_with("Customer", "CUST-1", "custom_crm_organization", "Org A")
+
+	def test_linked_customer_is_not_overwritten(self):
+		"""A Customer already linked to an organization keeps it"""
+		self.run_link("Org B").assert_not_called()

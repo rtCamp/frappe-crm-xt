@@ -54,8 +54,10 @@ def link_customer_to_organization(doc):
 	from the database, not the in-memory doc.
 	"""
 	organization = doc.get("organization")
+	if not organization:
+		return
 	customer = frappe.db.get_value("CRM Deal", doc.name, "erpnext_customer")
-	if customer and organization and not frappe.db.get_value("Customer", customer, "custom_crm_organization"):
+	if customer and not frappe.db.get_value("Customer", customer, "custom_crm_organization"):
 		frappe.db.set_value("Customer", customer, "custom_crm_organization", organization)
 
 
