@@ -20,7 +20,7 @@ def execute():
 		deal = frappe.qb.DocType("CRM Deal")
 		old, new = deal[OLD_FIELD], deal[NEW_FIELD]
 		frappe.qb.update(deal).set(new, old).where(
-			(old.isnotnull()) & (old != "") & (new.isnull() | (new == ""))
+			old.isnotnull() & (old != "") & (new.isnull() | (new == ""))
 		).run()
 
 	_update_saved_layouts()
@@ -32,13 +32,17 @@ def execute():
 
 
 def _update_saved_layouts():
-	"""Point saved CRM Fields Layouts at the new fieldname."""
 	if not frappe.db.exists("DocType", "CRM Fields Layout"):
 		return
 
 	old_ref, new_ref = f'"{OLD_FIELD}"', f'"{NEW_FIELD}"'
-	for name, layout in frappe.get_all("CRM Fields Layout", fields=["name", "layout"], as_list=True):
-		if layout and old_ref in layout and new_ref not in layout:
+	for name, layout in frappe.get_all(
+		"CRM Fields Layout",
+		filters={"dt": "CRM Deal"},
+		fields=["name", "layout"],
+		as_list=True,
+	):
+		if layout and old_ref in layout:
 			frappe.db.set_value(
 				"CRM Fields Layout",
 				name,
