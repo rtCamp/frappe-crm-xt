@@ -28,8 +28,8 @@ def fill_from_organization(doc):
 		return
 	org = frappe.db.get_value("CRM Organization", doc.organization, ORGANIZATION_FIELDS, as_dict=True) or {}
 	for field in ORGANIZATION_FIELDS:
-		if not doc.get(field) and org.get(field):
-			doc.set(field, org[field])
+		if not doc.get(field):
+			doc.set(field, org.get(field))
 
 
 def validate_probability(doc):
