@@ -12,7 +12,24 @@ from frappe_crm_xt.utils.gmail_thread import link_gmail_threads
 
 def validate(doc, method=None):
 	validate_probability(doc)
+	fill_from_organization(doc)
 	validate_project(doc)
+
+
+ORGANIZATION_FIELDS = ("annual_revenue", "industry", "no_of_employees", "territory", "website")
+
+
+def fill_from_organization(doc):
+	"""Server-side twin of the form script, for deals that skip the UI (Data Import, API).
+
+	Fills blanks only, so values given in the import sheet are kept.
+	"""
+	if not (doc.get("organization") and doc.has_value_changed("organization")):
+		return
+	org = frappe.db.get_value("CRM Organization", doc.organization, ORGANIZATION_FIELDS, as_dict=True) or {}
+	for field in ORGANIZATION_FIELDS:
+		if not doc.get(field) and org.get(field):
+			doc.set(field, org[field])
 
 
 def validate_probability(doc):
