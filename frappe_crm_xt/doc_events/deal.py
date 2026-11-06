@@ -73,10 +73,10 @@ def validate_project(doc):
 
 def on_update(doc, method=None):
 	link_customer_to_organization(doc)
-	if doc.get("organization") and doc.has_value_changed("organization"):
-		from frappe_crm_xt.doc_events.organization import link_addresses_to_deal
+	if doc.has_value_changed("organization"):
+		from frappe_crm_xt.doc_events.organization import relink_deal_addresses
 
-		link_addresses_to_deal(doc)
+		relink_deal_addresses(doc)
 
 
 def link_customer_to_organization(doc):
