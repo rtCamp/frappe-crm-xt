@@ -2,14 +2,8 @@ import frappe
 
 from frappe_crm_xt.doc_events.deal import ORGANIZATION_FIELDS
 
-ORGANIZATION = "CRM Organization"
 
-
-def on_update(doc, method=None):
-	sync_deals(doc)
-
-
-def sync_deals(org):
+def sync_deals(org, method=None):
 	"""A changed organization detail goes to its deals that were blank or still held the old value;
 	a value set on the deal itself is kept."""
 	before = org.get_doc_before_save()
@@ -32,9 +26,11 @@ def on_address_update(doc, method=None):
 	stays removed, as the organization's links did not change."""
 	before = doc.get_doc_before_save()
 	known = (
-		{link.link_name for link in before.links if link.link_doctype == ORGANIZATION} if before else set()
+		{link.link_name for link in before.links if link.link_doctype == "CRM Organization"}
+		if before
+		else set()
 	)
-	current = [link.link_name for link in doc.links if link.link_doctype == ORGANIZATION]
+	current = [link.link_name for link in doc.links if link.link_doctype == "CRM Organization"]
 	link_organization_deals(doc, [org for org in current if org not in known])
 
 
@@ -52,13 +48,14 @@ def link_organization_deals(address, orgs):
 def relink_deal_addresses(deal):
 	"""Deal on_update with a new organization: its former organization's addresses go, its new
 	organization's come; an address added to the deal by hand stays."""
+	link = {"parenttype": "Address", "link_doctype": "CRM Deal", "link_name": deal.name}
 	before = deal.get_doc_before_save()
 	new = organization_addresses(deal.organization)
 	if stale := [name for name in organization_addresses(before and before.organization) if name not in new]:
-		frappe.db.delete("Dynamic Link", {**deal_link(deal.name), "parent": ("in", stale)})
+		frappe.db.delete("Dynamic Link", {**link, "parent": ("in", stale)})
 	for name in new:
-		if not frappe.db.exists("Dynamic Link", {**deal_link(deal.name), "parent": name}):
-			frappe.get_doc("Address", name).append("links", deal_link(deal.name)).db_insert()
+		if not frappe.db.exists("Dynamic Link", {**link, "parent": name}):
+			frappe.get_doc("Address", name).append("links", link).db_insert()
 
 
 def organization_addresses(organization):
@@ -66,10 +63,6 @@ def organization_addresses(organization):
 		return []
 	return frappe.get_all(
 		"Dynamic Link",
-		{"parenttype": "Address", "link_doctype": ORGANIZATION, "link_name": organization},
+		{"parenttype": "Address", "link_doctype": "CRM Organization", "link_name": organization},
 		pluck="parent",
 	)
-
-
-def deal_link(deal):
-	return {"parenttype": "Address", "link_doctype": "CRM Deal", "link_name": deal}

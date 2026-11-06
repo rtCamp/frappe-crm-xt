@@ -37,12 +37,12 @@ def execute():
 			query = query.set(deal.exchange_rate, value("exchange_rate"))
 		query.run()
 
-	orgs_by_address = {}
-	for link in frappe.get_all(
+	for name in frappe.get_all(
 		"Dynamic Link",
 		{"parenttype": "Address", "link_doctype": "CRM Organization"},
-		["parent", "link_name"],
+		pluck="parent",
+		distinct=True,
 	):
-		orgs_by_address.setdefault(link.parent, []).append(link.link_name)
-	for name, orgs in orgs_by_address.items():
-		link_organization_deals(frappe.get_doc("Address", name), orgs)
+		address = frappe.get_doc("Address", name)
+		orgs = [link.link_name for link in address.links if link.link_doctype == "CRM Organization"]
+		link_organization_deals(address, orgs)

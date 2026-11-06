@@ -26,12 +26,8 @@ def fill_from_organization(doc):
 	"""
 	if not (doc.get("organization") and doc.has_value_changed("organization")):
 		return
-	org = (
-		frappe.db.get_value(
-			"CRM Organization", doc.organization, (*ORGANIZATION_FIELDS, "exchange_rate"), as_dict=True
-		)
-		or {}
-	)
+	fields = (*ORGANIZATION_FIELDS, "exchange_rate")
+	org = frappe.db.get_value("CRM Organization", doc.organization, fields, as_dict=True) or {}
 	for field in ORGANIZATION_FIELDS:
 		if not doc.get(field):
 			doc.set(field, org.get(field))
