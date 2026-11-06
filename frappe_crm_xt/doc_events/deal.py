@@ -16,7 +16,7 @@ def validate(doc, method=None):
 	validate_project(doc)
 
 
-ORGANIZATION_FIELDS = ("annual_revenue", "industry", "no_of_employees", "territory", "website")
+ORGANIZATION_FIELDS = ("annual_revenue", "currency", "industry", "no_of_employees", "territory", "website")
 
 
 def fill_from_organization(doc):
@@ -26,10 +26,18 @@ def fill_from_organization(doc):
 	"""
 	if not (doc.get("organization") and doc.has_value_changed("organization")):
 		return
-	org = frappe.db.get_value("CRM Organization", doc.organization, ORGANIZATION_FIELDS, as_dict=True) or {}
+	org = (
+		frappe.db.get_value(
+			"CRM Organization", doc.organization, (*ORGANIZATION_FIELDS, "exchange_rate"), as_dict=True
+		)
+		or {}
+	)
 	for field in ORGANIZATION_FIELDS:
 		if not doc.get(field):
 			doc.set(field, org.get(field))
+			# FCRM's validate rated the deal's currency before this hook ran
+			if field == "currency" and org.get("currency"):
+				doc.set("exchange_rate", org.get("exchange_rate"))
 
 
 def validate_probability(doc):
@@ -65,6 +73,10 @@ def validate_project(doc):
 
 def on_update(doc, method=None):
 	link_customer_to_organization(doc)
+	if doc.get("organization") and doc.has_value_changed("organization"):
+		from frappe_crm_xt.doc_events.organization import link_addresses_to_deal
+
+		link_addresses_to_deal(doc)
 
 
 def link_customer_to_organization(doc):
