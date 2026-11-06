@@ -27,15 +27,12 @@ def execute():
 	for field in ORGANIZATION_FIELDS:
 		blank = 0 if field == "annual_revenue" else ""
 		filled = frappe.qb.from_(organization).where(fn.IfNull(organization[field], blank) != blank)
-		query = (
+		(
 			frappe.qb.update(deal)
 			.set(deal[field], value(field))
 			.where(fn.IfNull(deal[field], blank) == blank)
 			.where(deal.organization.isin(filled.select(organization.name)))
-		)
-		if field == "currency":
-			query = query.set(deal.exchange_rate, value("exchange_rate"))
-		query.run()
+		).run()
 
 	for name in frappe.get_all(
 		"Dynamic Link",

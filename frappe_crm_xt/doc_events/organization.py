@@ -11,8 +11,7 @@ def sync_deals(org, method=None):
 		return
 	# stored form: an unset revenue is 0, as in the NOT NULL column
 	new, old = org.get_valid_dict(), before.get_valid_dict()
-	# not currency: the deal's amounts and product rates are in its own currency and are not converted
-	changed = {f: old[f] for f in ORGANIZATION_FIELDS if f != "currency" and old[f] != new[f]}
+	changed = {f: old[f] for f in ORGANIZATION_FIELDS if old[f] != new[f]}
 	if not changed:
 		return
 	for deal in frappe.get_all("CRM Deal", {"organization": org.name}, ["name", *changed]):
@@ -25,13 +24,14 @@ def on_address_update(doc, method=None):
 	"""An organization newly linked to the address brings its deals; a deal link removed by hand
 	stays removed, as the organization's links did not change."""
 	before = doc.get_doc_before_save()
-	known = (
-		{link.link_name for link in before.links if link.link_doctype == "CRM Organization"}
-		if before
-		else set()
-	)
-	current = [link.link_name for link in doc.links if link.link_doctype == "CRM Organization"]
-	link_organization_deals(doc, [org for org in current if org not in known])
+	links = before.links if before else []
+	known = {link.link_name for link in links if link.link_doctype == "CRM Organization"}
+	added = [
+		link.link_name
+		for link in doc.links
+		if link.link_doctype == "CRM Organization" and link.link_name not in known
+	]
+	link_organization_deals(doc, added)
 
 
 def link_organization_deals(address, orgs):
@@ -43,26 +43,3 @@ def link_organization_deals(address, orgs):
 		if deal not in linked:
 			# rows only, no Address save: its validations (e.g. GSTIN) must not block a deal save
 			address.append("links", {"link_doctype": "CRM Deal", "link_name": deal}).db_insert()
-
-
-def relink_deal_addresses(deal):
-	"""Deal on_update with a new organization: its former organization's addresses go, its new
-	organization's come; an address added to the deal by hand stays."""
-	link = {"parenttype": "Address", "link_doctype": "CRM Deal", "link_name": deal.name}
-	before = deal.get_doc_before_save()
-	new = organization_addresses(deal.organization)
-	if stale := [name for name in organization_addresses(before and before.organization) if name not in new]:
-		frappe.db.delete("Dynamic Link", {**link, "parent": ("in", stale)})
-	for name in new:
-		if not frappe.db.exists("Dynamic Link", {**link, "parent": name}):
-			frappe.get_doc("Address", name).append("links", link).db_insert()
-
-
-def organization_addresses(organization):
-	if not organization:
-		return []
-	return frappe.get_all(
-		"Dynamic Link",
-		{"parenttype": "Address", "link_doctype": "CRM Organization", "link_name": organization},
-		pluck="parent",
-	)

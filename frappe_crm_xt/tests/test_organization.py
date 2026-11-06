@@ -30,7 +30,6 @@ class TestOrganizationEvents(IntegrationTestCase):
 
 	def test_organization_addresses_are_linked_to_deals(self):
 		"""Addresses added before and after a deal are linked to it"""
-
 		before = self.address(self.org.name)
 		deal = self.deal()
 		after = self.address(self.org.name)
