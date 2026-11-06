@@ -15,13 +15,12 @@ def sync_deals(org):
 		return
 	# stored form: an unset revenue is 0, as in the NOT NULL column
 	new, old = org.get_valid_dict(), before.get_valid_dict()
-	changed = {f: old[f] for f in ORGANIZATION_FIELDS if old[f] != new[f]}
+	# not currency: the deal's amounts and product rates are in its own currency and are not converted
+	changed = {f: old[f] for f in ORGANIZATION_FIELDS if f != "currency" and old[f] != new[f]}
 	if not changed:
 		return
 	for deal in frappe.get_all("CRM Deal", {"organization": org.name}, ["name", *changed]):
 		values = {f: new[f] for f, previous in changed.items() if not deal[f] or deal[f] == previous}
-		if "currency" in values:
-			values["exchange_rate"] = org.exchange_rate
 		if values:
 			frappe.db.set_value("CRM Deal", deal.name, values)
 
