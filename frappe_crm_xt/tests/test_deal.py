@@ -183,3 +183,31 @@ class TestLinkCustomerToOrganization(IntegrationTestCase):
 	def test_linked_customer_is_not_overwritten(self):
 		"""A Customer already linked to an organization keeps it"""
 		self.run_link("Org B").assert_not_called()
+
+
+class TestFillFromOrganization(IntegrationTestCase):
+	def run_fill(self, changed=True, **values):
+		doc = frappe._dict(organization="Org A", has_value_changed=lambda f: changed)
+		doc.update(values)
+		doc.set = doc.__setitem__
+		org = {"industry": "Media", "website": "https://org.example", "territory": None}
+		with patch.object(deal_events.frappe.db, "get_value", return_value=org):
+			deal_events.fill_from_organization(doc)
+		return doc
+
+	def test_blank_fields_are_filled(self):
+		"""An imported deal gets the organization's details"""
+		doc = self.run_fill()
+		self.assertEqual((doc.industry, doc.website), ("Media", "https://org.example"))
+
+	def test_values_from_the_sheet_are_kept(self):
+		"""A value given in the import is not overwritten"""
+		self.assertEqual(self.run_fill(industry="Retail").industry, "Retail")
+
+	def test_blank_organization_values_are_skipped(self):
+		"""A blank organization value leaves the deal field alone"""
+		self.assertIsNone(self.run_fill().get("territory"))
+
+	def test_unchanged_organization_is_not_refilled(self):
+		"""Saving a deal without changing its organization does nothing"""
+		self.assertIsNone(self.run_fill(changed=False).get("industry"))

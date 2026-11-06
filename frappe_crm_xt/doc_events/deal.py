@@ -12,7 +12,24 @@ from frappe_crm_xt.utils.gmail_thread import link_gmail_threads
 
 def validate(doc, method=None):
 	validate_probability(doc)
+	fill_from_organization(doc)
 	validate_project(doc)
+
+
+ORGANIZATION_FIELDS = ("annual_revenue", "industry", "no_of_employees", "territory", "website")
+
+
+def fill_from_organization(doc):
+	"""Server-side twin of the form script, for deals that skip the UI (Data Import, API).
+
+	Fills blanks only, so values given in the import sheet are kept.
+	"""
+	if not (doc.get("organization") and doc.has_value_changed("organization")):
+		return
+	org = frappe.db.get_value("CRM Organization", doc.organization, ORGANIZATION_FIELDS, as_dict=True) or {}
+	for field in ORGANIZATION_FIELDS:
+		if not doc.get(field):
+			doc.set(field, org.get(field))
 
 
 def validate_probability(doc):
@@ -48,6 +65,31 @@ def validate_project(doc):
 
 def on_update(doc, method=None):
 	link_customer_to_organization(doc)
+	if doc.has_value_changed("organization"):
+		relink_deal_addresses(doc)
+
+
+def relink_deal_addresses(deal):
+	"""Deal on_update with a new organization: its former organization's addresses go, its new
+	organization's come; an address added to the deal by hand stays."""
+	link = {"parenttype": "Address", "link_doctype": "CRM Deal", "link_name": deal.name}
+	before = deal.get_doc_before_save()
+	new = organization_addresses(deal.organization)
+	if stale := [name for name in organization_addresses(before and before.organization) if name not in new]:
+		frappe.db.delete("Dynamic Link", {**link, "parent": ("in", stale)})
+	for name in new:
+		if not frappe.db.exists("Dynamic Link", {**link, "parent": name}):
+			frappe.get_doc("Address", name).append("links", link).db_insert()
+
+
+def organization_addresses(organization):
+	if not organization:
+		return []
+	return frappe.get_all(
+		"Dynamic Link",
+		{"parenttype": "Address", "link_doctype": "CRM Organization", "link_name": organization},
+		pluck="parent",
+	)
 
 
 def link_customer_to_organization(doc):
