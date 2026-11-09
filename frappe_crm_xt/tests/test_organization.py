@@ -57,3 +57,14 @@ class TestOrganizationEvents(IntegrationTestCase):
 				frappe.db.get_value("CRM Deal", blank.name, fields), ("https://old.example", "51-200", 300, 1)
 			)
 			self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "no_of_employees"), "1-10")
+
+	def test_open_deal_pages_are_told_to_reload(self):
+		"""Each synced deal gets a doc_update event, so an open deal page reloads"""
+		from unittest.mock import patch
+
+		deals = {self.deal().name, self.deal().name}
+		self.org.website = "https://new.example"
+		with patch("frappe.publish_realtime") as publish:
+			self.org.save(ignore_permissions=True)
+		updated = {c.kwargs["docname"] for c in publish.call_args_list if c.args[0] == "doc_update"}
+		self.assertLessEqual(deals, updated)
