@@ -43,3 +43,4 @@ def execute():
 		address = frappe.get_doc("Address", name)
 		orgs = [link.link_name for link in address.links if link.link_doctype == "CRM Organization"]
 		link_organization_deals(address, orgs)
+		address.save(ignore_permissions=True)

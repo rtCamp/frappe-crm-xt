@@ -77,3 +77,24 @@ class TestOrganizationEvents(IntegrationTestCase):
 		address.links = [link for link in address.links if link.link_doctype != "CRM Deal"]
 		address.save(ignore_permissions=True)
 		self.assertFalse(self.deal_linked(address.name, deal.name))
+
+	def test_address_moved_off_organization_leaves_its_deals(self):
+		"""An address no longer linked to an organization is no longer linked to its deals"""
+		deal = self.deal()
+		address = self.address(self.org.name)
+		address.reload()
+		address.links = [link for link in address.links if link.link_doctype != "CRM Organization"]
+		address.append("links", {"link_doctype": "CRM Deal", "link_name": self.deal(organization=None).name})
+		address.save(ignore_permissions=True)
+		self.assertFalse(self.deal_linked(address.name, deal.name))
+
+	def test_revenue_follows_organization(self):
+		"""A deal with no revenue, or the old one, takes the organization's new revenue"""
+		blank, old, own = self.deal(), self.deal(), self.deal()
+		self.org.annual_revenue = 100
+		self.org.save(ignore_permissions=True)
+		frappe.db.set_value("CRM Deal", own.name, "annual_revenue", 7)
+		self.org.annual_revenue = 200
+		self.org.save(ignore_permissions=True)
+		revenue = lambda d: frappe.db.get_value("CRM Deal", d.name, "annual_revenue")  # noqa: E731
+		self.assertEqual((revenue(blank), revenue(old), revenue(own)), (200, 200, 7))

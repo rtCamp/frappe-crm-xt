@@ -72,14 +72,22 @@ def on_update(doc, method=None):
 def relink_deal_addresses(deal):
 	"""Deal on_update with a new organization: its former organization's addresses go, its new
 	organization's come; an address added to the deal by hand stays."""
-	link = {"parenttype": "Address", "link_doctype": "CRM Deal", "link_name": deal.name}
 	before = deal.get_doc_before_save()
 	new = organization_addresses(deal.organization)
-	if stale := [name for name in organization_addresses(before and before.organization) if name not in new]:
-		frappe.db.delete("Dynamic Link", {**link, "parent": ("in", stale)})
+	for name in organization_addresses(before and before.organization):
+		if name not in new:
+			address = frappe.get_doc("Address", name)
+			address.set("links", [row for row in address.links if not is_deal_link(row, {deal.name})])
+			address.save()
 	for name in new:
-		if not frappe.db.exists("Dynamic Link", {**link, "parent": name}):
-			frappe.get_doc("Address", name).append("links", link).db_insert()
+		address = frappe.get_doc("Address", name)
+		if not any(is_deal_link(row, {deal.name}) for row in address.links):
+			address.append("links", {"link_doctype": "CRM Deal", "link_name": deal.name})
+			address.save()
+
+
+def is_deal_link(row, deals):
+	return row.link_doctype == "CRM Deal" and row.link_name in deals
 
 
 def organization_addresses(organization):
