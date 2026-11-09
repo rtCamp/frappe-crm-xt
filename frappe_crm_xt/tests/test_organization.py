@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests import IntegrationTestCase, set_user
 
 
 class TestOrganizationEvents(IntegrationTestCase):
@@ -79,12 +79,9 @@ class TestOrganizationEvents(IntegrationTestCase):
 				{"doctype": "User", "email": user, "first_name": "XT Sync", "send_welcome_email": 0}
 			).insert(ignore_permissions=True).add_roles("Sales User")
 		mine, other = self.deal(deal_owner=user), self.deal(deal_owner="Administrator")
-		frappe.set_user(user)
-		try:
+		with set_user(user):
 			org = frappe.get_doc("CRM Organization", self.org.name)
 			org.website = "https://new.example"
 			org.save()
-		finally:
-			frappe.set_user("Administrator")
 		website = lambda d: frappe.db.get_value("CRM Deal", d.name, "website")  # noqa: E731
 		self.assertEqual((website(mine), website(other)), ("https://new.example", "https://old.example"))

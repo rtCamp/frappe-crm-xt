@@ -4,8 +4,7 @@ from frappe_crm_xt.doc_events.deal import ORGANIZATION_FIELDS
 
 
 def sync_deals(org, method=None):
-	"""A changed organization detail is copied as saved to its deals the user may access,
-	replacing their value."""
+	"""Copy changed organization details to the deals the user may access."""
 	before = org.get_doc_before_save()
 	if not before:
 		return
