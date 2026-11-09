@@ -21,4 +21,6 @@ def sync_deals(org, method=None):
 	frappe.db.set_value("CRM Deal", {"name": ("in", deals)}, changed, update_modified=False)
 	for name in deals:
 		# an open CRM deal page refetches on list_update, so it shows the new values
-		frappe.publish_realtime("list_update", {"doctype": "CRM Deal", "name": name}, after_commit=True)
+		frappe.publish_realtime(
+			"list_update", {"doctype": "CRM Deal", "name": name}, doctype="CRM Deal", after_commit=True
+		)
