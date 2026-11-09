@@ -43,17 +43,17 @@ class TestOrganizationEvents(IntegrationTestCase):
 		"""The backfill fills blank deal fields, keeps a deal's own value, and can rerun"""
 		from frappe_crm_xt.patches.v1_0.fill_deals_from_organization import execute
 
-		self.org.update({"no_of_employees": "51-200", "annual_revenue": 300})
+		self.org.update({"no_of_employees": "51-200", "annual_revenue": 300, "custom_key_account": 1})
 		self.org.save(ignore_permissions=True)
 		blank, own = self.deal(), self.deal()
 		# deals made before the fill existed: blank details
-		blanked = {"website": None, "no_of_employees": None, "annual_revenue": 0}
+		blanked = {"website": None, "no_of_employees": None, "annual_revenue": 0, "custom_key_account": 0}
 		frappe.db.set_value("CRM Deal", blank.name, blanked)
 		frappe.db.set_value("CRM Deal", own.name, {**blanked, "no_of_employees": "1-10"})
-		fields = ["website", "no_of_employees", "annual_revenue"]
+		fields = ["website", "no_of_employees", "annual_revenue", "custom_key_account"]
 		for _ in range(2):
 			execute()
 			self.assertEqual(
-				frappe.db.get_value("CRM Deal", blank.name, fields), ("https://old.example", "51-200", 300)
+				frappe.db.get_value("CRM Deal", blank.name, fields), ("https://old.example", "51-200", 300, 1)
 			)
 			self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "no_of_employees"), "1-10")

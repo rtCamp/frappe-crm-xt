@@ -24,7 +24,8 @@ def execute():
 		)
 
 	for field in ORGANIZATION_FIELDS:
-		blank = 0 if field == "annual_revenue" else ""
+		# numeric columns (Currency, Check) store an unset value as 0
+		blank = 0 if field in ("annual_revenue", "custom_key_account") else ""
 		filled = frappe.qb.from_(organization).where(fn.IfNull(organization[field], blank) != blank)
 		(
 			frappe.qb.update(deal)

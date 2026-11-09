@@ -16,7 +16,14 @@ def validate(doc, method=None):
 	validate_project(doc)
 
 
-ORGANIZATION_FIELDS = ("annual_revenue", "industry", "no_of_employees", "territory", "website")
+ORGANIZATION_FIELDS = (
+	"annual_revenue",
+	"custom_key_account",
+	"industry",
+	"no_of_employees",
+	"territory",
+	"website",
+)
 
 
 def fill_from_organization(doc):
