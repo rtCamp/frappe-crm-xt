@@ -24,6 +24,9 @@ doc_events = {
 		"on_update": "frappe_crm_xt.doc_events.deal.on_update",
 		"on_trash": "frappe_crm_xt.doc_events.lead_deal_delete.on_trash",
 	},
+	"CRM Organization": {
+		"on_update": "frappe_crm_xt.doc_events.organization.sync_deals",
+	},
 	"CRM Task": {
 		"validate": "frappe_crm_xt.doc_events.task.validate",
 		"on_trash": [
