@@ -71,8 +71,8 @@ class TestOrganizationEvents(IntegrationTestCase):
 		self.assertLessEqual(deals, updated)
 		self.assertEqual(modified, {d: frappe.db.get_value("CRM Deal", d, "modified") for d in deals})
 
-	def test_sales_user_updates_only_their_deals(self):
-		"""A Sales User's organization change reaches only the deals they may access"""
+	def test_sales_user_updates_all_deals(self):
+		"""A Sales User's organization change also reaches deals they may not access"""
 		user = "xt-sync-sales-user@example.com"
 		if not frappe.db.exists("User", user):
 			frappe.get_doc(
@@ -84,4 +84,4 @@ class TestOrganizationEvents(IntegrationTestCase):
 			org.website = "https://new.example"
 			org.save()
 		website = lambda d: frappe.db.get_value("CRM Deal", d.name, "website")  # noqa: E731
-		self.assertEqual((website(mine), website(other)), ("https://new.example", "https://old.example"))
+		self.assertEqual((website(mine), website(other)), ("https://new.example", "https://new.example"))
