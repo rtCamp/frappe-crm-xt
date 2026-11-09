@@ -20,16 +20,16 @@ class TestOrganizationEvents(IntegrationTestCase):
 			ignore_permissions=True
 		)
 
-	def test_changes_reach_deals_without_their_own_value(self):
-		"""Blank or old values follow the organization; a deal's own value is kept"""
+	def test_changes_reach_all_deals(self):
+		"""A changed organization detail replaces the value on every deal, its own one too"""
 		synced, own = self.deal(), self.deal(website="https://own.example")
 		self.org.website = "https://new.example"
 		self.org.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("CRM Deal", synced.name, "website"), "https://new.example")
-		self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "website"), "https://own.example")
+		for deal in (synced, own):
+			self.assertEqual(frappe.db.get_value("CRM Deal", deal.name, "website"), "https://new.example")
 
 	def test_revenue_follows_organization(self):
-		"""A deal with no revenue, or the old one, takes the organization's new revenue"""
+		"""Every deal takes the organization's new revenue, a value set on the deal too"""
 		blank, old, own = self.deal(), self.deal(), self.deal()
 		self.org.annual_revenue = 100
 		self.org.save(ignore_permissions=True)
@@ -37,7 +37,7 @@ class TestOrganizationEvents(IntegrationTestCase):
 		self.org.annual_revenue = 200
 		self.org.save(ignore_permissions=True)
 		revenue = lambda d: frappe.db.get_value("CRM Deal", d.name, "annual_revenue")  # noqa: E731
-		self.assertEqual((revenue(blank), revenue(old), revenue(own)), (200, 200, 7))
+		self.assertEqual((revenue(blank), revenue(old), revenue(own)), (200, 200, 200))
 
 	def test_patch_fills_only_blank_deal_fields(self):
 		"""The backfill fills blank deal fields, keeps a deal's own value, and can rerun"""
