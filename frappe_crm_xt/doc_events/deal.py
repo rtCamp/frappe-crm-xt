@@ -20,9 +20,10 @@ ORGANIZATION_FIELDS = ("annual_revenue", "industry", "no_of_employees", "territo
 
 
 def fill_from_organization(doc):
-	"""Server-side twin of the form script, for deals that skip the UI (Data Import, API).
+	"""Organization details for deals that skip the UI (Data Import, API).
 
-	Fills blanks only, so values given in the import sheet are kept.
+	Fills blanks only, so values given in the import sheet are kept. The form script overwrites
+	instead: there the user picked the organization by hand and can edit the fields afterwards.
 	"""
 	if not (doc.get("organization") and doc.has_value_changed("organization")):
 		return

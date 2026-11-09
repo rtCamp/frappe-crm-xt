@@ -38,3 +38,22 @@ class TestOrganizationEvents(IntegrationTestCase):
 		self.org.save(ignore_permissions=True)
 		revenue = lambda d: frappe.db.get_value("CRM Deal", d.name, "annual_revenue")  # noqa: E731
 		self.assertEqual((revenue(blank), revenue(old), revenue(own)), (200, 200, 7))
+
+	def test_patch_fills_only_blank_deal_fields(self):
+		"""The backfill fills blank deal fields, keeps a deal's own value, and can rerun"""
+		from frappe_crm_xt.patches.v1_0.fill_deals_from_organization import execute
+
+		self.org.update({"no_of_employees": "51-200", "annual_revenue": 300})
+		self.org.save(ignore_permissions=True)
+		blank, own = self.deal(), self.deal()
+		# deals made before the fill existed: blank details
+		blanked = {"website": None, "no_of_employees": None, "annual_revenue": 0}
+		frappe.db.set_value("CRM Deal", blank.name, blanked)
+		frappe.db.set_value("CRM Deal", own.name, {**blanked, "no_of_employees": "1-10"})
+		fields = ["website", "no_of_employees", "annual_revenue"]
+		for _ in range(2):
+			execute()
+			self.assertEqual(
+				frappe.db.get_value("CRM Deal", blank.name, fields), ("https://old.example", "51-200", 300)
+			)
+			self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "no_of_employees"), "1-10")
