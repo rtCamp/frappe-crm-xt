@@ -68,3 +68,21 @@ class TestOrganizationEvents(IntegrationTestCase):
 			self.org.save(ignore_permissions=True)
 		updated = {c.kwargs["docname"] for c in publish.call_args_list if c.args[0] == "doc_update"}
 		self.assertLessEqual(deals, updated)
+
+	def test_sales_user_updates_only_their_deals(self):
+		"""A Sales User's organization change reaches only the deals they may access"""
+		user = "xt-sync-sales-user@example.com"
+		if not frappe.db.exists("User", user):
+			frappe.get_doc(
+				{"doctype": "User", "email": user, "first_name": "XT Sync", "send_welcome_email": 0}
+			).insert(ignore_permissions=True).add_roles("Sales User")
+		mine, other = self.deal(deal_owner=user), self.deal(deal_owner="Administrator")
+		frappe.set_user(user)
+		try:
+			org = frappe.get_doc("CRM Organization", self.org.name)
+			org.website = "https://new.example"
+			org.save()
+		finally:
+			frappe.set_user("Administrator")
+		website = lambda d: frappe.db.get_value("CRM Deal", d.name, "website")  # noqa: E731
+		self.assertEqual((website(mine), website(other)), ("https://new.example", "https://old.example"))
