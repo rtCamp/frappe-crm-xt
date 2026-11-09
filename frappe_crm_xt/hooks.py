@@ -27,9 +27,6 @@ doc_events = {
 	"CRM Organization": {
 		"on_update": "frappe_crm_xt.doc_events.organization.sync_deals",
 	},
-	"Address": {
-		"validate": "frappe_crm_xt.doc_events.organization.on_address_validate",
-	},
 	"CRM Task": {
 		"validate": "frappe_crm_xt.doc_events.task.validate",
 		"on_trash": [

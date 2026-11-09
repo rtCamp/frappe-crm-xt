@@ -2,7 +2,7 @@ import frappe
 from frappe.query_builder import functions as fn
 from frappe.utils import now
 
-from frappe_crm_xt.doc_events.deal import ORGANIZATION_FIELDS, is_deal_link
+from frappe_crm_xt.doc_events.deal import ORGANIZATION_FIELDS
 
 
 def sync_deals(org, method=None):
@@ -27,29 +27,3 @@ def sync_deals(org, method=None):
 			.where(deal.organization == org.name)
 			.where(fn.IfNull(deal[field], blank).isin([blank, previous or blank]))
 		).run()
-
-
-def on_address_validate(doc, method=None):
-	"""Deal links follow the address's organizations: a newly linked organization brings its deals,
-	an unlinked one takes them away; a deal link removed by hand stays removed."""
-	before = doc.get_doc_before_save()
-	old, new = organizations(before), organizations(doc)
-	if unlinked := list(old - new):
-		removed = set(frappe.get_all("CRM Deal", {"organization": ("in", unlinked)}, pluck="name"))
-		doc.set("links", [row for row in doc.links if not is_deal_link(row, removed)])
-	link_organization_deals(doc, list(new - old))
-
-
-def organizations(address):
-	links = address.links if address else []
-	return {link.link_name for link in links if link.link_doctype == "CRM Organization"}
-
-
-def link_organization_deals(address, orgs):
-	"""Each deal of these organizations is linked to the address, so it shows on the deal."""
-	if not orgs:
-		return
-	linked = {link.link_name for link in address.links if link.link_doctype == "CRM Deal"}
-	for deal in frappe.get_all("CRM Deal", {"organization": ("in", orgs)}, pluck="name"):
-		if deal not in linked:
-			address.append("links", {"link_doctype": "CRM Deal", "link_name": deal})

@@ -28,66 +28,6 @@ class TestOrganizationEvents(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("CRM Deal", synced.name, "website"), "https://new.example")
 		self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "website"), "https://own.example")
 
-	def test_organization_addresses_are_linked_to_deals(self):
-		"""Addresses added before and after a deal are linked to it"""
-		before = self.address(self.org.name)
-		deal = self.deal()
-		after = self.address(self.org.name)
-		for name in (before.name, after.name):
-			self.assertTrue(self.deal_linked(name, deal.name))
-
-	def address(self, org, doctype="CRM Organization"):
-		return frappe.get_doc(
-			{
-				"doctype": "Address",
-				"address_title": f"XT {frappe.generate_hash(length=6)}",
-				"address_line1": "1 Street",
-				"city": "Austin",
-				"country": "United States",
-				"links": [{"link_doctype": doctype, "link_name": org}],
-			}
-		).insert(ignore_permissions=True)
-
-	def deal_linked(self, address, deal):
-		return bool(
-			frappe.db.exists(
-				"Dynamic Link", {"parent": address, "link_doctype": "CRM Deal", "link_name": deal}
-			)
-		)
-
-	def test_new_organization_swaps_addresses(self):
-		"""A deal moved to another organization loses the old organization's addresses, keeps its own"""
-		other = frappe.get_doc(
-			{"doctype": "CRM Organization", "organization_name": f"XT-Org-{frappe.generate_hash(length=8)}"}
-		).insert(ignore_permissions=True)
-		old, new = self.address(self.org.name), self.address(other.name)
-		deal = self.deal()
-		own = self.address(deal.name, "CRM Deal")
-		deal.reload()
-		deal.organization = other.name
-		deal.save(ignore_permissions=True)
-		self.assertFalse(self.deal_linked(old.name, deal.name))
-		self.assertTrue(self.deal_linked(new.name, deal.name))
-		self.assertTrue(self.deal_linked(own.name, deal.name))
-
-	def test_unlinked_deal_stays_unlinked(self):
-		"""Removing a deal from an organization's address is not undone by the address save"""
-		deal = self.deal()
-		address = self.address(self.org.name)
-		address.links = [link for link in address.links if link.link_doctype != "CRM Deal"]
-		address.save(ignore_permissions=True)
-		self.assertFalse(self.deal_linked(address.name, deal.name))
-
-	def test_address_moved_off_organization_leaves_its_deals(self):
-		"""An address no longer linked to an organization is no longer linked to its deals"""
-		deal = self.deal()
-		address = self.address(self.org.name)
-		address.reload()
-		address.links = [link for link in address.links if link.link_doctype != "CRM Organization"]
-		address.append("links", {"link_doctype": "CRM Deal", "link_name": self.deal(organization=None).name})
-		address.save(ignore_permissions=True)
-		self.assertFalse(self.deal_linked(address.name, deal.name))
-
 	def test_revenue_follows_organization(self):
 		"""A deal with no revenue, or the old one, takes the organization's new revenue"""
 		blank, old, own = self.deal(), self.deal(), self.deal()
