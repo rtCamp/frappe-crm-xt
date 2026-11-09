@@ -26,7 +26,6 @@ def execute():
 	_update_saved_layouts()
 
 	frappe.delete_doc("Custom Field", old_cf, force=True)
-	frappe.db.commit()
 
 	click.secho(f"  CRM Deal.{OLD_FIELD} → {NEW_FIELD}", fg="green")
 
