@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests import IntegrationTestCase, set_user
 
 
 class TestOrganizationEvents(IntegrationTestCase):
@@ -57,3 +57,31 @@ class TestOrganizationEvents(IntegrationTestCase):
 				frappe.db.get_value("CRM Deal", blank.name, fields), ("https://old.example", "51-200", 300, 1)
 			)
 			self.assertEqual(frappe.db.get_value("CRM Deal", own.name, "no_of_employees"), "1-10")
+
+	def test_open_deal_pages_are_told_to_reload(self):
+		"""Each synced deal gets a list_update event and keeps its modified time"""
+		from unittest.mock import patch
+
+		deals = {self.deal().name, self.deal().name}
+		modified = {d: frappe.db.get_value("CRM Deal", d, "modified") for d in deals}
+		self.org.website = "https://new.example"
+		with patch("frappe.publish_realtime") as publish:
+			self.org.save(ignore_permissions=True)
+		updated = {c.args[1]["name"] for c in publish.call_args_list if c.args[0] == "list_update"}
+		self.assertLessEqual(deals, updated)
+		self.assertEqual(modified, {d: frappe.db.get_value("CRM Deal", d, "modified") for d in deals})
+
+	def test_sales_user_updates_all_deals(self):
+		"""A Sales User's organization change also reaches deals they may not access"""
+		user = "xt-sync-sales-user@example.com"
+		if not frappe.db.exists("User", user):
+			frappe.get_doc(
+				{"doctype": "User", "email": user, "first_name": "XT Sync", "send_welcome_email": 0}
+			).insert(ignore_permissions=True).add_roles("Sales User")
+		mine, other = self.deal(deal_owner=user), self.deal(deal_owner="Administrator")
+		with set_user(user):
+			org = frappe.get_doc("CRM Organization", self.org.name)
+			org.website = "https://new.example"
+			org.save()
+		website = lambda d: frappe.db.get_value("CRM Deal", d.name, "website")  # noqa: E731
+		self.assertEqual((website(mine), website(other)), ("https://new.example", "https://new.example"))
