@@ -3,7 +3,7 @@ name = "frappe_crm_xt"
 authors = [
     { name = "rtcamp", email = "support@rtcamp.com" }
 ]
-description = "Frappe CRM XT: extensible sidebar list views, global search, and ERPNext bridge hooks."
+description = "Frappe CRM XT: extensible sidebar list views and ERPNext bridge hooks."
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "AGPL-3.0" }

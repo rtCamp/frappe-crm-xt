@@ -2,7 +2,6 @@
 
 Extensions for [Frappe CRM](https://github.com/frappe/crm) that add features without forking the core app.
 
-- **[Global search bar](#global-search-bar)** — Cmd/Ctrl+K modal backed by [`rtcamp/frappe_search`](https://github.com/rtCamp/frappe_search) *(optional)*.
 - **[Extensible sidebar](#extensible-sidebar-crm_sidebar-hook)** — any installed Frappe app can inject list views, routes, groups, or separators into the CRM sidebar via the `crm_sidebar` hook.
 - **[Events tab](#events-tab)** — calendar events tab injected into every Lead and Deal page; create, edit, duplicate, and delete Frappe `Event` records linked to the record.
 - **[Event notifications](#event-notifications)** — scheduler sends in-browser realtime alerts and optional emails to event owners and participants before their events.
@@ -31,11 +30,10 @@ Frappe CRM XT ships a **Vite-built Vue 3 IIFE bundle** (`crm_xt_app.js`) that is
 
 | Component | Purpose |
 |-----------|---------|
-| `App.vue` | Root — sidebar injection, route registration, Events tab injection, global search trigger |
+| `App.vue` | Root — sidebar injection, route registration, Events tab injection |
 | `ExtListView.vue` | Full-featured list view (frappe-ui `ListView`, filters, sort, column picker, pagination) |
 | `InjectedEventsTab.vue` | Events tab timeline and empty state |
 | `InjectedEventModal.vue` | Create / edit / delete / duplicate Event dialog |
-| `SearchDialog.vue` | Cmd/Ctrl+K global search modal |
 | `EventNotifications.vue` | Per-event notification rules editor |
 | `ListFilterLocal.vue` | Ad-hoc filter panel used inside `ExtListView` |
 | `Attendee.vue` | Email-tag input for event attendees |
@@ -50,7 +48,7 @@ Frappe CRM XT ships a **Vite-built Vue 3 IIFE bundle** (`crm_xt_app.js`) that is
 | `api/follow.py` | Document Follow toggle endpoint |
 | `api/contact.py` | Gmail Add-on contact lookup endpoints |
 | `api/quotation.py` | Quotation auto-populate helper |
-| `api/search.py` | Global search backend (frappe_search or built-in fallback) |
+| `api/search.py` | Overrides `search_link` so Link dropdowns show 20 rows |
 | `api/sidebar.py` | Reads `crm_sidebar` hooks from all installed apps and returns merged item list |
 | `tasks/deal_inactivity.py` | Daily "deal gone quiet" scheduler — creates follow-up tasks + posts the Slack digest, holiday-aware |
 | `doc_events/incoming_sla.py` | Maintains `custom_incoming_sla_due` (incoming-email SLA) so a native "Minutes After" Notification can alert the owner |
@@ -59,19 +57,6 @@ Frappe CRM XT ships a **Vite-built Vue 3 IIFE bundle** (`crm_xt_app.js`) that is
 ---
 
 ## Features
-
-### Global Search Bar
-
-Press **Cmd+K** (macOS) or **Ctrl+K** (Linux/Windows) anywhere in Frappe CRM to open a full-screen search modal.
-
-Two backends are tried in order:
-
-| Priority | Backend | Notes |
-|----------|---------|-------|
-| 1 | [`rtcamp/frappe_search`](https://github.com/rtCamp/frappe_search) | Full-text search with `<mark>` highlighting. Used when installed. |
-| 2 | Frappe built-in global search | `frappe.utils.global_search` — always available, no extra install. |
-
----
 
 ### Events Tab
 
@@ -369,7 +354,6 @@ The built-in list view rendered for every `"list_view"` sidebar item includes:
 | Package | Required |
 |---------|----------|
 | `crm` (Frappe CRM) | ✅ |
-| `rtcamp/frappe_search` | Optional — enables Cmd/Ctrl+K global search |
 | `rtcamp/frappe_gmail_thread` | Optional — enables Gmail thread activity entries on Lead/Deal |
 | `erpnext` | Optional — required for Project creation on Won Deal and Customer MSA/Insurance fields |
 

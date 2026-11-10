@@ -288,17 +288,3 @@
   font-weight: 600;
   letter-spacing: 0.01em;
 }
-
-/* Mark/highlight in search excerpts. */
-#crm-xt-app mark {
-  background: #fef08a;
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 1px;
-}
-
-/* When the CRM sidebar is collapsed (52px wide), hide the text label on the
- * custom search button — only its icon remains visible. */
-.w-\[52px\] #crm-xt-search-btn span:not(.grid) {
-  display: none;
-}
