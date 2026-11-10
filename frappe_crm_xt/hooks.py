@@ -67,16 +67,6 @@ doctype_js = {
 	"Quotation": "public/js/quotation_auto_items.js",
 }
 
-
-global_search_doctypes = {
-	"Default": [
-		{"doctype": "CRM Lead"},
-		{"doctype": "CRM Deal"},
-		{"doctype": "FCRM Note"},
-	]
-}
-
-
 scheduler_events = {
 	"all": ["frappe_crm_xt.api.event.trigger_offset_event_notifications"],
 	"hourly": ["frappe_crm_xt.api.event.trigger_hourly_event_notifications"],
