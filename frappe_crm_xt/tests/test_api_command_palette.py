@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from crm.api.command_palette import SEARCH_TYPES
 from frappe.tests import IntegrationTestCase
 
 from frappe_crm_xt.api.command_palette import search
@@ -16,3 +17,5 @@ class TestCommandPaletteSearch(IntegrationTestCase):
 		matches = {(m["doctype"], m["name"]): m["title"] for m in search(query=title)["matches"]}
 
 		self.assertEqual(matches.get(("CRM Deal", deal.name)), title)
+		# CRM's module is shared across sites, so the override must leave it alone.
+		self.assertEqual(SEARCH_TYPES["CRM Deal"][1], "organization")
