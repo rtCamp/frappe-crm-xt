@@ -438,6 +438,9 @@ function _getCurrentDocInfo() {
   }
 }
 
+// Matches frappe-ui's inactive tab label (text-ink-gray-5)
+const _TAB_INACTIVE_COLOR = 'var(--ink-gray-5,#7c7c7c)'
+
 function _removeEventsOverlay() {
   if (_xtEventsApp) {
     _xtEventsApp.unmount()
@@ -449,7 +452,7 @@ function _removeEventsOverlay() {
   }
   if (_xtEventsTabBtn) {
     _xtEventsTabBtn.setAttribute('data-state', 'inactive')
-    _xtEventsTabBtn.style.color = ''
+    _xtEventsTabBtn.style.color = _TAB_INACTIVE_COLOR
   }
   _prevActiveTab = null
   // Restore the Reka indicator to the currently-active native tab
@@ -478,13 +481,22 @@ function _syncRekaIndicator(targetBtn) {
   const indicator = tablist.querySelector('div[style*="--reka-tabs-indicator"]')
   if (!indicator) return
 
-  // Dim/restore native active tab text
+  // The tab's text colour lives on its inner Pill span, not the button
   const activeNative = tablist.querySelector(
     '[role="tab"][data-state="active"]',
   )
+  const activeLabel =
+    activeNative?.querySelector('[data-state]') || activeNative
   if (targetBtn) {
     // Moving indicator to our button — dim the native active tab
-    if (activeNative) activeNative.style.color = 'var(--ink-gray-5,#6b6b6b)'
+    if (activeLabel) activeLabel.style.color = _TAB_INACTIVE_COLOR
+    // Reka only rewrites these on a tab change, so keep its values to put back
+    indicator.dataset.xtSize ??= indicator.style.getPropertyValue(
+      '--reka-tabs-indicator-size',
+    )
+    indicator.dataset.xtPos ??= indicator.style.getPropertyValue(
+      '--reka-tabs-indicator-position',
+    )
     const tablistRect = tablist.getBoundingClientRect()
     const btnRect = targetBtn.getBoundingClientRect()
     const pos = btnRect.left - tablistRect.left + tablist.scrollLeft
@@ -494,12 +506,21 @@ function _syncRekaIndicator(targetBtn) {
     )
     indicator.style.setProperty('--reka-tabs-indicator-position', pos + 'px')
   } else {
-    // Restoring — un-dim native tab, let Reka recompute naturally
-    if (activeNative) activeNative.style.color = ''
-    if (_xtEventsTabBtn) _xtEventsTabBtn.style.color = ''
-    // Reka updates indicator on its next frame when it detects active tab change
-    // Force it by dispatching a resize event (Reka listens to ResizeObserver)
-    window.dispatchEvent(new Event('resize'))
+    // Restoring — un-dim native tab and put Reka's indicator back
+    if (activeLabel) activeLabel.style.color = ''
+    if (_xtEventsTabBtn) _xtEventsTabBtn.style.color = _TAB_INACTIVE_COLOR
+    if (indicator.dataset.xtSize !== undefined) {
+      indicator.style.setProperty(
+        '--reka-tabs-indicator-size',
+        indicator.dataset.xtSize,
+      )
+      indicator.style.setProperty(
+        '--reka-tabs-indicator-position',
+        indicator.dataset.xtPos,
+      )
+      delete indicator.dataset.xtSize
+      delete indicator.dataset.xtPos
+    }
   }
 }
 
@@ -578,6 +599,7 @@ function _tryInjectEventsTab() {
   btn.setAttribute('data-xt-events-tab', '')
   btn.setAttribute('data-state', 'inactive')
   btn.className = refTab.className
+  btn.style.color = _TAB_INACTIVE_COLOR
 
   // Calendar icon + label — matches the icon+text structure of other tabs
   btn.innerHTML =
