@@ -364,9 +364,3 @@
 :where(.text-\[9px\]) {
   font-size: 9px;
 }
-:where(.z-\[9999\]) {
-  z-index: 9999;
-}
-:where(.z-\[10000\]) {
-  z-index: 10000;
-}

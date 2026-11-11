@@ -1,7 +1,7 @@
 <template>
   <!-- Plain overlay — component is mounted directly to body by InjectedEventsTab -->
   <div
-    class="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black-overlay-200 dark:bg-black-overlay-700 dialog-overlay outline-none px-4 py-4"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black-overlay-200 dark:bg-black-overlay-700 dialog-overlay outline-none px-4 py-4"
     @click.self="emit('close')"
   >
     <div
@@ -248,7 +248,7 @@
     <Transition name="crm-xt-fade">
       <div
         v-if="showDeleteDialog"
-        class="fixed inset-0 z-[10000] flex items-center justify-center bg-black-overlay-200 dark:bg-black-overlay-700 outline-none"
+        class="fixed inset-0 z-[60] flex items-center justify-center bg-black-overlay-200 dark:bg-black-overlay-700 outline-none"
         @click.self="cancelDelete"
       >
         <div
