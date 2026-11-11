@@ -2,8 +2,7 @@
  * frappe_crm_xt — IIFE frontend bundle
  *
  * Injected into the FCRM SPA page via <script defer>.  Mounts a Vue 3 app
- * on a portal div, providing:
- *   1. Cmd/Ctrl+K global search dialog (backed by frappe_search or fallback).
+ * on a portal div: sidebar list views, the Events tab and the follow button.
  */
 import { createApp } from 'vue'
 import App from './components/App.vue'
