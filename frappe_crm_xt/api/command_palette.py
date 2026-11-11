@@ -12,10 +12,10 @@ from crm.api import command_palette
 TITLE_SEARCH_TYPES = {
 	"CRM Deal": ("Deal", "title", ["title", "organization", "email", "mobile_no"]),
 }
+# CRM's helpers all read SEARCH_TYPES, so set our entries once at import.
+command_palette.SEARCH_TYPES.update(TITLE_SEARCH_TYPES)
 
 
 @frappe.whitelist()
 def search(query: str = "", recent_names: str | None = None):
-	# CRM's helpers all read SEARCH_TYPES; our entries are constant, so updating it is idempotent.
-	command_palette.SEARCH_TYPES.update(TITLE_SEARCH_TYPES)
 	return command_palette.search(query=query, recent_names=recent_names)
