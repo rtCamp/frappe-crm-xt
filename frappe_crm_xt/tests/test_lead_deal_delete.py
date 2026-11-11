@@ -61,6 +61,26 @@ class TestLeadDealDelete(IntegrationTestCase):
 		)
 		self.assertTrue(frappe.db.exists("Contact", contact.name))
 
+	def test_delete_deal_with_another_users_notification(self):
+		"""A notification for another user no longer blocks deleting the deal"""
+		deal = frappe.get_doc({"doctype": "CRM Deal"}).insert(ignore_permissions=True)
+		notification = frappe.get_doc(
+			{
+				"doctype": "CRM Notification",
+				"type": "Mention",
+				"to_user": "Administrator",
+				"reference_doctype": "CRM Deal",
+				"reference_name": deal.name,
+				"notification_type_doctype": "CRM Deal",
+				"notification_type_doc": deal.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.delete_doc("CRM Deal", deal.name, ignore_permissions=True)
+
+		self.assertFalse(frappe.db.exists("CRM Deal", deal.name))
+		self.assertFalse(frappe.db.exists("CRM Notification", notification.name))
+
 	def test_on_trash_for_doc_with_no_links(self):
 		"""on_trash runs without error when no Dynamic Link rows reference the doc"""
 		on_trash(frappe._dict(doctype="CRM Deal", name=f"XT-Deal-Nope-{frappe.generate_hash(length=8)}"))

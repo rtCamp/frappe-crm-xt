@@ -40,6 +40,13 @@ def on_trash(doc, method=None):
 			update_modified=False,
 		)
 
+	# CRM scopes notifications to their recipient, so the delete modal hides other
+	# users' ones while they still block the delete with LinkExistsError.
+	frappe.db.delete("CRM Notification", {"reference_doctype": doc.doctype, "reference_name": doc.name})
+	frappe.db.delete(
+		"CRM Notification", {"notification_type_doctype": doc.doctype, "notification_type_doc": doc.name}
+	)
+
 
 def _detach_or_delete(parent_dt, link_filters):
 	"""For each parent linked to the doc being trashed: if our link is its only
