@@ -13,3 +13,4 @@ frappe_crm_xt.patches.v1_0.clear_calendar_field_descriptions
 frappe_crm_xt.patches.v1_0.backfill_customer_crm_organization
 frappe_crm_xt.patches.v1_0.rename_sow_sheet_link_to_handover_sheet_link
 frappe_crm_xt.patches.v1_0.fill_deals_from_organization
+frappe_crm_xt.patches.v1_0.merge_duplicate_project_size
