@@ -490,38 +490,22 @@ function _syncRekaIndicator(targetBtn) {
   if (targetBtn) {
     // Moving indicator to our button — dim the native active tab
     if (activeLabel) activeLabel.style.color = _TAB_INACTIVE_COLOR
-    // Reka only rewrites these on a tab change, so keep its values to put back
-    indicator.dataset.xtSize ??= indicator.style.getPropertyValue(
-      '--reka-tabs-indicator-size',
-    )
-    indicator.dataset.xtPos ??= indicator.style.getPropertyValue(
-      '--reka-tabs-indicator-position',
-    )
-    const tablistRect = tablist.getBoundingClientRect()
-    const btnRect = targetBtn.getBoundingClientRect()
-    const pos = btnRect.left - tablistRect.left + tablist.scrollLeft
-    indicator.style.setProperty(
-      '--reka-tabs-indicator-size',
-      btnRect.width + 'px',
-    )
-    indicator.style.setProperty('--reka-tabs-indicator-position', pos + 'px')
   } else {
-    // Restoring — un-dim native tab and put Reka's indicator back
+    // Restoring — un-dim native tab and point the indicator at it
     if (activeLabel) activeLabel.style.color = ''
     if (_xtEventsTabBtn) _xtEventsTabBtn.style.color = _TAB_INACTIVE_COLOR
-    if (indicator.dataset.xtSize !== undefined) {
-      indicator.style.setProperty(
-        '--reka-tabs-indicator-size',
-        indicator.dataset.xtSize,
-      )
-      indicator.style.setProperty(
-        '--reka-tabs-indicator-position',
-        indicator.dataset.xtPos,
-      )
-      delete indicator.dataset.xtSize
-      delete indicator.dataset.xtPos
-    }
   }
+  // Measure the tab now: Reka may already have moved to a newly clicked tab
+  const btn = targetBtn || activeNative
+  if (!btn) return
+  const tablistRect = tablist.getBoundingClientRect()
+  const btnRect = btn.getBoundingClientRect()
+  const pos = btnRect.left - tablistRect.left + tablist.scrollLeft
+  indicator.style.setProperty(
+    '--reka-tabs-indicator-size',
+    btnRect.width + 'px',
+  )
+  indicator.style.setProperty('--reka-tabs-indicator-position', pos + 'px')
 }
 
 function _showEventsOverlay(doctype, docname) {
