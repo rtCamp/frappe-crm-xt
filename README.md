@@ -2,7 +2,7 @@
 
 Extensions for [Frappe CRM](https://github.com/frappe/crm). The app adds features to CRM without a fork of the core app. It uses hooks, API overrides, CRM Form Scripts and a small Vue bundle that loads into the CRM single-page app.
 
-Supported version: Frappe CRM v16 (Frappe Framework v16).
+Supported version: Frappe CRM v1.91.0 or later, or any v16 release (Frappe Framework v16).
 
 ## Features
 
@@ -22,7 +22,7 @@ Supported version: Frappe CRM v16 (Frappe Framework v16).
 
 | App | Required |
 |-----|----------|
-| `crm` (Frappe CRM v16) | Yes |
+| `crm` (Frappe CRM v1.91.0 or later, or v16) | Yes |
 | `erpnext` | Optional. Needed for Quotation auto-items and holiday lists from a company. |
 | `frappe_gmail_thread` | Optional. Needed for the Gmail thread integration. |
 
