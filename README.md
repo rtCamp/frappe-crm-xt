@@ -267,7 +267,6 @@ These functions need the `frappe_gmail_thread` app.
 
 - **Linked documents.** The delete dialog does not list Contact, Address and Gmail Thread, because CRM cannot unlink them. The app removes these links when the record is deleted.
 - **Addresses.** If the deleted record was the only link of an address, the app deletes the address.
-- **Notifications.** The app deletes the CRM Notifications of the record. CRM shows each user only their own notifications, so the delete dialog cannot show the notifications of other users. Without this cleanup, they block the delete.
 
 ---
 
