@@ -306,6 +306,19 @@
 :where(.rounded-xl) {
   border-radius: var(--radius-7, 16px);
 }
+/* Tailwind forms' reset (input, select, textarea { border-radius: 0 }) outranks :where(). */
+:is(input, select, textarea).rounded-sm {
+  border-radius: var(--radius-1, 4px);
+}
+:is(input, select, textarea).rounded {
+  border-radius: var(--radius-4, 8px);
+}
+:is(input, select, textarea).rounded-md {
+  border-radius: var(--radius-5, 10px);
+}
+:is(input, select, textarea).rounded-lg {
+  border-radius: var(--radius-6, 12px);
+}
 :where(.rounded-t) {
   border-top-left-radius: var(--radius-4, 8px);
   border-top-right-radius: var(--radius-4, 8px);
