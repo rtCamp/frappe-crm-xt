@@ -17,5 +17,7 @@ class TestCommandPaletteSearch(IntegrationTestCase):
 		matches = {(m["doctype"], m["name"]): m["title"] for m in search(query=title)["matches"]}
 
 		self.assertEqual(matches.get(("CRM Deal", deal.name)), title)
+		recent = search(recent_names=frappe.as_json({"CRM Deal": [deal.name]}))["recent"]
+		self.assertEqual([r["title"] for r in recent], [title])
 		# CRM's module is shared across sites, so the override must leave it alone.
 		self.assertEqual(SEARCH_TYPES["CRM Deal"][1], "organization")

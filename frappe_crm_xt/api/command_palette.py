@@ -27,12 +27,14 @@ def search(query: str = "", recent_names: str | None = None):
 	"""Return permission-filtered CRM records for the command palette."""
 	query = (query or "").strip()
 	recent = _parse_recent(recent_names)
-	return {
+	result = {
 		"matches": _search_all(query) if len(query) >= 2 else [],
 		"activity": _search_activity(query) if len(query) >= 2 else [],
 		"recent": _get_recent(recent) if not query else [],
 		"upcoming": _get_upcoming() if not query else [],
 	}
+	_retitle_deals(result)
+	return result
 
 
 def _search_all(query: str):
@@ -41,3 +43,21 @@ def _search_all(query: str):
 		if frappe.has_permission(doctype, "read"):
 			results.extend(_search_doctype(doctype, config, query))
 	return results
+
+
+def _retitle_deals(result: dict):
+	"""Use the deal Title in the sections CRM titles from its own SEARCH_TYPES (by organization)."""
+	# (row, key that holds the title, deal name); CRM already limited these rows to readable deals
+	rows = [(r, "title", r["name"]) for r in result["recent"] if r["doctype"] == "CRM Deal"]
+	rows += [
+		(r, "parent_title", r["parent_name"]) for r in result["activity"] if r["parent_doctype"] == "CRM Deal"
+	]
+	rows += [
+		(r, "title", r["name"]) for r in result["upcoming"] if r["kind"] == "sla" and r["route"] == "Deal"
+	]
+	if not rows:
+		return
+	names = list({name for _r, _k, name in rows})
+	titles = dict(frappe.get_all("CRM Deal", {"name": ["in", names]}, ["name", "title"], as_list=True))
+	for row, key, name in rows:
+		row[key] = titles.get(name) or row[key]
