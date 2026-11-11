@@ -644,31 +644,9 @@ async function apiFetch(method, params = {}) {
   padding-inline-end: 0.5rem; /* matches pe-2 (8px) */
 }
 
-/*
- * Visibility select trigger: FormControl renders a Reka-UI <button> with no
- * chevron icon at all in this build. Inject one via ::after on the trigger
- * inside our marker wrapper so users can see it's a dropdown.
- */
+/* Stretch the Visibility select trigger to the full field width. */
 .fcrm-xt-visibility-select :deep(button[role='combobox'][data-slot='trigger']) {
   width: 100%;
   justify-content: space-between;
-}
-.fcrm-xt-visibility-select
-  :deep(button[role='combobox'][data-slot='trigger'])::after {
-  content: '';
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23687076' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  transition: transform 0.15s ease;
-}
-.fcrm-xt-visibility-select
-  :deep(
-    button[role='combobox'][data-slot='trigger'][data-state='open']
-  )::after {
-  transform: rotate(180deg);
 }
 </style>
