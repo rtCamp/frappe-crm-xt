@@ -289,16 +289,78 @@
   letter-spacing: 0.01em;
 }
 
-/* Mark/highlight in search excerpts. */
-#crm-xt-app mark {
-  background: #fef08a;
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 1px;
+/* CRM's frappe-ui renamed the named radii to a numeric scale (rounded → rounded-4),
+ * so its CSS has no rules for the names the bundled frappe-ui and our components use. */
+:where(.rounded-sm) {
+  border-radius: var(--radius-1, 4px);
+}
+:where(.rounded) {
+  border-radius: var(--radius-4, 8px);
+}
+:where(.rounded-md) {
+  border-radius: var(--radius-5, 10px);
+}
+:where(.rounded-lg) {
+  border-radius: var(--radius-6, 12px);
+}
+:where(.rounded-xl) {
+  border-radius: var(--radius-7, 16px);
+}
+/* Tailwind forms' reset (input, select, textarea { border-radius: 0 }) outranks :where(). */
+:is(input, select, textarea).rounded-sm {
+  border-radius: var(--radius-1, 4px);
+}
+:is(input, select, textarea).rounded {
+  border-radius: var(--radius-4, 8px);
+}
+:is(input, select, textarea).rounded-md {
+  border-radius: var(--radius-5, 10px);
+}
+:is(input, select, textarea).rounded-lg {
+  border-radius: var(--radius-6, 12px);
+}
+:where(.rounded-t) {
+  border-top-left-radius: var(--radius-4, 8px);
+  border-top-right-radius: var(--radius-4, 8px);
+}
+:where(.rounded-t-lg) {
+  border-top-left-radius: var(--radius-6, 12px);
+  border-top-right-radius: var(--radius-6, 12px);
+}
+:where(.rounded-b) {
+  border-bottom-left-radius: var(--radius-4, 8px);
+  border-bottom-right-radius: var(--radius-4, 8px);
+}
+:where(.rounded-r) {
+  border-top-right-radius: var(--radius-4, 8px);
+  border-bottom-right-radius: var(--radius-4, 8px);
 }
 
-/* When the CRM sidebar is collapsed (52px wide), hide the text label on the
- * custom search button — only its icon remains visible. */
-.w-\[52px\] #crm-xt-search-btn span:not(.grid) {
-  display: none;
+/* Other classes our components use that CRM's CSS does not ship. */
+:where(.text-ink-green-9) {
+  color: var(--ink-green-9, oklch(32.1% 0.05 163.839));
+}
+:where(.focus-within\:bg-surface-gray-2:focus-within) {
+  background-color: var(--surface-gray-2);
+}
+:where(.ring-white) {
+  --tw-ring-color: #fff;
+}
+:where(.space-x-1\.5 > :not(:last-child)) {
+  margin-inline-end: 0.375rem;
+}
+:where(.top-10) {
+  top: 2.5rem;
+}
+:where(.max-h-\[15rem\]) {
+  max-height: 15rem;
+}
+:where(.max-h-\[165px\]) {
+  max-height: 165px;
+}
+:where(.w-\[158px\]) {
+  width: 158px;
+}
+:where(.text-\[9px\]) {
+  font-size: 9px;
 }
