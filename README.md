@@ -287,7 +287,7 @@ The app has two parts:
 - **Backend.** Doc events, scheduled jobs, `override_whitelisted_methods`, custom fields, property setters and CRM Form Script fixtures.
 - **Frontend bundle.** Vite builds a Vue 3 IIFE bundle (`crm_xt_app.js`) that loads into the CRM single-page app. A `MutationObserver` in `App.vue` adds the sidebar items, the `/xt/` routes, the Events tab and the follow button. The app does not change CRM source files.
 
-The bundle has its own copy of [frappe-ui](https://github.com/frappe/frappe-ui). CRM v16 uses a newer frappe-ui that changed class names, for example `rounded` became `rounded-4`. `frontend/src/styles/bundle.css` maps the old class names that the bundle uses to the new CRM design tokens.
+The bundle has its own copy of [frappe-ui](https://github.com/frappe/frappe-ui). CRM v16 uses a newer frappe-ui that changed class names, for example `rounded` became `rounded-4`. `frontend/src/styles/bundle.css` maps the old class names that the bundle uses to the new CRM design tokens. These rules are global on purpose: CRM elements that still use the old names also get their corners back.
 
 ### API overrides
 
