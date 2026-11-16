@@ -26,8 +26,8 @@ def _skipped(reason):
 
 
 def notify_inactive_deals(as_of=None):
-	"""Scheduler entry (daily); runs only when a Notification is selected and enabled.
-	Always returns a dict: {candidates, deals_notified, messages, reason}.
+	"""Scheduler entry (daily); runs once per Notification selected in CRM XT Settings (sales and CSM).
+	Always returns a dict: {candidates, deals_notified, messages, reason} (counts summed over both).
 
 	`as_of` ("YYYY-MM-DD") overrides today for backfill/tests; the scheduler passes none.
 	"""
@@ -35,8 +35,18 @@ def notify_inactive_deals(as_of=None):
 		return _skipped("settings doctype missing")
 	settings = frappe.get_cached_doc(SETTINGS)
 
-	notification_name = settings.get("deal_inactivity_notification")
-	if not notification_name or not frappe.db.exists("Notification", notification_name):
+	# dict.fromkeys: the same Notification picked in both fields must not post twice
+	names = dict.fromkeys(
+		settings.get(f) for f in ("deal_inactivity_notification", "deal_inactivity_csm_notification")
+	)
+	results = [_notify_one(settings, n, as_of) for n in names if n] or [_skipped("no notification selected")]
+	counts = {k: sum(r[k] for r in results) for k in ("candidates", "deals_notified", "messages")}
+	reason = "ok" if any(r["reason"] == "ok" for r in results) else results[0]["reason"]
+	return {**results[0], **counts, "reason": reason}
+
+
+def _notify_one(settings, notification_name, as_of):
+	if not frappe.db.exists("Notification", notification_name):
 		return _skipped("no notification selected")
 	notification = frappe.get_doc("Notification", notification_name)
 	if not notification.enabled:

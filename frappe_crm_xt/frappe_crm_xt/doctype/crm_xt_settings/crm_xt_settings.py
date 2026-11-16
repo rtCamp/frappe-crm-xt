@@ -19,6 +19,7 @@ class CRMXTSettings(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		deal_inactivity_csm_notification: DF.Link | None
 		deal_inactivity_days: DF.Int
 		deal_inactivity_followup_enabled: DF.Check
 		deal_inactivity_holiday_list: DF.Link | None
