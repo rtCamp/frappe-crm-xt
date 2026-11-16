@@ -6,6 +6,7 @@
  "field_order": [
   "deal_inactivity_section",
   "deal_inactivity_notification",
+  "deal_inactivity_csm_notification",
   "deal_inactivity_days",
   "column_break_nrwz",
   "deal_inactivity_use_company_holiday_list",
@@ -30,6 +31,14 @@
    "fieldname": "deal_inactivity_notification",
    "fieldtype": "Link",
    "label": "Notification",
+   "link_filters": "[[\"Notification\",\"document_type\",\"=\",\"CRM Deal\"],[\"Notification\",\"event\",\"=\",\"Custom\"]]",
+   "options": "Notification"
+  },
+  {
+   "description": "Same digest for CSM pipelines (sent to the CSM channel). Leave blank to turn off.",
+   "fieldname": "deal_inactivity_csm_notification",
+   "fieldtype": "Link",
+   "label": "CSM Notification",
    "link_filters": "[[\"Notification\",\"document_type\",\"=\",\"CRM Deal\"],[\"Notification\",\"event\",\"=\",\"Custom\"]]",
    "options": "Notification"
   },

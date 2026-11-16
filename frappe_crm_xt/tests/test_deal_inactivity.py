@@ -199,3 +199,13 @@ class TestNotifyInactiveDeals(IntegrationTestCase):
 		self.assertEqual(res["deals_notified"], 0)
 		self.assertEqual(res["reason"], "no notification selected")
 		self.assertEqual(self._tasks(alpha), 0)
+
+	def test_csm_notification_runs_on_its_own(self):
+		s = frappe.get_single("CRM XT Settings")
+		s.deal_inactivity_notification = None
+		s.deal_inactivity_csm_notification = NOTIF
+		s.save(ignore_permissions=True)
+		alpha = self._deal("_TESTDI csm", "2026-07-15")
+		res = di.notify_inactive_deals(as_of="2026-07-21")
+		self.assertEqual(res["deals_notified"], 1)
+		self.assertEqual(self._tasks(alpha), 1)
