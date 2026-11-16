@@ -87,3 +87,9 @@ class TestSplitNotifications(IntegrationTestCase):
 		self.assertEqual(
 			frappe.db.get_value("Notification", self.NAME + " (CSM)", "condition_type"), "Python"
 		)
+
+	def test_unrecognised_renewal_rule_stops_the_patch(self):
+		self._sales("doc.a or 'renewal' not in (doc.custom_pipeline or '').lower()")
+		with self.assertRaises(frappe.ValidationError):
+			split_notifications()
+		self.assertFalse(frappe.db.exists("Notification", self.NAME + " (CSM)"))
