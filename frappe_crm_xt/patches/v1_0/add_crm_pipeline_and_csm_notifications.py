@@ -5,6 +5,7 @@
    posts to the CSM webhook for CSM deals only. Copies are created disabled, like the originals.
 """
 
+import click
 import frappe
 from pypika.functions import Trim
 
@@ -80,9 +81,11 @@ def migrate_pipelines():
 
 def _skip(name, reason):
 	"""A condition we can't split safely is left as it is: it must not stop the migrate."""
-	message = f"CSM split skipped for {name!r}: {reason}"
-	print(message)
-	frappe.log_error(title="CRM CSM alert split skipped", message=message)
+	frappe.log_error(
+		title=f"CRM CSM split skipped: {name}",
+		message=f"{reason}\n\nThe alert was left unchanged and no (CSM) copy was made. Split it by hand.",
+	)
+	click.secho(f"CSM split skipped for {name!r}: {reason}. See Error Log.", fg="yellow")
 
 
 def split_notifications():

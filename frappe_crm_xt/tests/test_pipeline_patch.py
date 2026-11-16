@@ -47,7 +47,11 @@ class TestSplitNotifications(IntegrationTestCase):
 				}
 			).insert(ignore_permissions=True)
 		n = frappe.get_doc("Notification", self.NAME)
-		n.condition_type, n.condition = condition_type, condition
+		n.condition_type, n.condition, n.filters = (
+			condition_type,
+			condition,
+			None,
+		)  # tests share one transaction
 		n.save(ignore_permissions=True)
 
 	def _conditions(self):
