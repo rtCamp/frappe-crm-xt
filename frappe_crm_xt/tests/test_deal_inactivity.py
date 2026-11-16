@@ -126,6 +126,7 @@ class TestNotifyInactiveDeals(IntegrationTestCase):
 
 		s = frappe.get_single("CRM XT Settings")
 		s.deal_inactivity_notification = NOTIF
+		s.deal_inactivity_csm_notification = None  # settings are cached; keep tests independent
 		s.deal_inactivity_days = 3  # 3 WORKING days
 		s.deal_inactivity_use_company_holiday_list = 0
 		s.deal_inactivity_holiday_list = HL  # these tests pin holidays to this list only
