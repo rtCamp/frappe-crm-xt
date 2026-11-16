@@ -1,7 +1,7 @@
 app_name = "frappe_crm_xt"
 app_title = "Frappe CRM XT"
 app_publisher = "rtcamp"
-app_description = "FCRM extensions: frappe_search bar and extensible sidebar list views."
+app_description = "FCRM extensions: extensible sidebar list views and ERPNext bridge hooks."
 app_email = "support@rtcamp.com"
 app_license = "agpl-3"
 
@@ -60,22 +60,14 @@ override_whitelisted_methods = {
 	"crm.api.doc.get_linked_docs_of_document": "frappe_crm_xt.api.doc.get_linked_docs_of_document",
 	# Bump Link dropdown default page_length 10 → 20 (frontend sends none).
 	"frappe.desk.search.search_link": "frappe_crm_xt.api.search.search_link",
+	# Match and show deals by our Title field in the ⌘K command palette.
+	"crm.api.command_palette.search": "frappe_crm_xt.api.command_palette.search",
 }
 
 
 doctype_js = {
 	"Quotation": "public/js/quotation_auto_items.js",
 }
-
-
-global_search_doctypes = {
-	"Default": [
-		{"doctype": "CRM Lead"},
-		{"doctype": "CRM Deal"},
-		{"doctype": "FCRM Note"},
-	]
-}
-
 
 scheduler_events = {
 	"all": ["frappe_crm_xt.api.event.trigger_offset_event_notifications"],

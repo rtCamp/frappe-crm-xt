@@ -1,14 +1,7 @@
-<template>
-  <SearchDialog
-    :show="showSearch"
-    @close="showSearch = false"
-    @navigate="onNavigate"
-  />
-</template>
+<template><div hidden /></template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, h, createApp } from 'vue'
-import SearchDialog from './SearchDialog.vue'
 import ExtListView from './ExtListView.vue'
 import InjectedEventsTab from './InjectedEventsTab.vue'
 import {
@@ -25,27 +18,7 @@ import {
   setLabelCollapsed,
 } from '../utils/sidebarRow.js'
 
-const showSearch = ref(false)
 const sidebarItems = ref([])
-
-// ── SPA navigation helper ───────────────────────────────────────────────────
-function onNavigate(route) {
-  showSearch.value = false
-  const path = route.path || ''
-  if (!path.startsWith('/crm/')) {
-    window.location.href = path
-    return
-  }
-  try {
-    window.history.pushState({}, '', path)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  } catch (err) {
-    // SPA push failed (e.g. SecurityError on cross-origin URL); fall back to a
-    // full page load so the user still gets to the requested route.
-    console.warn('[crm-xt] SPA navigation failed, doing full reload:', err)
-    window.location.href = path
-  }
-}
 
 // ── Generic fetch helper ────────────────────────────────────────────────────
 function csrf() {
@@ -435,76 +408,6 @@ function injectCustomSidebarBtns() {
   _syncActiveRow()
 }
 
-// ── Sidebar Search button injection (Notifications container) ────────────────
-function injectSidebarBtn() {
-  if (document.getElementById('crm-xt-search-btn')) return
-
-  const notifBtn =
-    document.getElementById('notifications-btn') ||
-    Array.from(document.querySelectorAll('button')).find(
-      (b) => b.querySelector('span')?.textContent?.trim() === 'Notifications',
-    )
-  const container = notifBtn?.closest('div.flex.flex-col')
-  if (!container) return
-
-  const isMac = /Mac|iPhone|iPad/i.test(
-    navigator.platform || navigator.userAgent,
-  )
-  const modKey = isMac ? '⌘' : 'Ctrl'
-
-  const kbdSuffix = `
-    <span data-xt-hide-collapsed class="ml-auto mr-2 flex items-center gap-1">
-      <kbd class="text-[0.65rem] text-ink-gray-5">${modKey}</kbd>
-      <kbd class="text-xs text-ink-gray-5">K</kbd>
-    </span>`
-
-  const template = _findNativeRow()
-  if (template) {
-    const row = _cloneNativeRow(template, {
-      label: 'Search',
-      icon: 'search',
-      suffix: kbdSuffix,
-      onClick: () => {
-        showSearch.value = true
-      },
-    })
-    row.id = 'crm-xt-search-btn'
-    container.insertBefore(row, notifBtn.nextSibling)
-    _syncCollapse()
-    return
-  }
-
-  const btn = document.createElement('button')
-  btn.id = 'crm-xt-search-btn'
-  btn.className =
-    'flex h-7.5 cursor-pointer items-center rounded text-ink-gray-8 duration-300 ease-in-out focus:outline-none focus:transition-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-outline-gray-3 hover:bg-surface-gray-2 relative mx-2 my-[1.5px]'
-  btn.classList.add('crm-xt')
-  btn.setAttribute('aria-label', 'Search')
-  btn.innerHTML = `
-    <div data-xt-inner class="flex w-full items-center justify-between duration-300 ease-in-out px-2 py-[7px]">
-      <div class="flex items-center truncate">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-          class="flex items-center size-4 text-ink-gray-8">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <span data-xt-label="margin"
-          class="flex-1 flex-shrink-0 truncate text-sm duration-300 ease-in-out ml-2 w-auto opacity-100"
-        >Search</span>
-      </div>
-      <span data-xt-hide-collapsed class="flex gap-1 items-center">
-        <kbd class="text-[0.65rem] text-ink-gray-5">${modKey}</kbd>
-        <kbd class="text-xs text-ink-gray-5">K</kbd>
-      </span>
-    </div>
-  `
-  btn.addEventListener('click', () => {
-    showSearch.value = true
-  })
-  container.insertBefore(btn, notifBtn.nextSibling)
-  _syncCollapse()
-}
-
 // ── Events tab injection ─────────────────────────────────────────────────────
 // FCRM doesn't have an Events tab.  We:
 //   1. Inject a fake "Events" tab button into the tablist
@@ -535,6 +438,9 @@ function _getCurrentDocInfo() {
   }
 }
 
+// Matches frappe-ui's inactive tab label (text-ink-gray-5)
+const _TAB_INACTIVE_COLOR = 'var(--ink-gray-5,#7c7c7c)'
+
 function _removeEventsOverlay() {
   if (_xtEventsApp) {
     _xtEventsApp.unmount()
@@ -546,7 +452,7 @@ function _removeEventsOverlay() {
   }
   if (_xtEventsTabBtn) {
     _xtEventsTabBtn.setAttribute('data-state', 'inactive')
-    _xtEventsTabBtn.style.color = ''
+    _xtEventsTabBtn.style.color = _TAB_INACTIVE_COLOR
   }
   _prevActiveTab = null
   // Restore the Reka indicator to the currently-active native tab
@@ -575,29 +481,31 @@ function _syncRekaIndicator(targetBtn) {
   const indicator = tablist.querySelector('div[style*="--reka-tabs-indicator"]')
   if (!indicator) return
 
-  // Dim/restore native active tab text
+  // The tab's text colour lives on its inner Pill span, not the button
   const activeNative = tablist.querySelector(
     '[role="tab"][data-state="active"]',
   )
+  const activeLabel =
+    activeNative?.querySelector('[data-state]') || activeNative
   if (targetBtn) {
     // Moving indicator to our button — dim the native active tab
-    if (activeNative) activeNative.style.color = 'var(--ink-gray-5,#6b6b6b)'
-    const tablistRect = tablist.getBoundingClientRect()
-    const btnRect = targetBtn.getBoundingClientRect()
-    const pos = btnRect.left - tablistRect.left + tablist.scrollLeft
-    indicator.style.setProperty(
-      '--reka-tabs-indicator-size',
-      btnRect.width + 'px',
-    )
-    indicator.style.setProperty('--reka-tabs-indicator-position', pos + 'px')
+    if (activeLabel) activeLabel.style.color = _TAB_INACTIVE_COLOR
   } else {
-    // Restoring — un-dim native tab, let Reka recompute naturally
-    if (activeNative) activeNative.style.color = ''
-    if (_xtEventsTabBtn) _xtEventsTabBtn.style.color = ''
-    // Reka updates indicator on its next frame when it detects active tab change
-    // Force it by dispatching a resize event (Reka listens to ResizeObserver)
-    window.dispatchEvent(new Event('resize'))
+    // Restoring — un-dim native tab and point the indicator at it
+    if (activeLabel) activeLabel.style.color = ''
+    if (_xtEventsTabBtn) _xtEventsTabBtn.style.color = _TAB_INACTIVE_COLOR
   }
+  // Measure the tab now: Reka may already have moved to a newly clicked tab
+  const btn = targetBtn || activeNative
+  if (!btn) return
+  const tablistRect = tablist.getBoundingClientRect()
+  const btnRect = btn.getBoundingClientRect()
+  const pos = btnRect.left - tablistRect.left + tablist.scrollLeft
+  indicator.style.setProperty(
+    '--reka-tabs-indicator-size',
+    btnRect.width + 'px',
+  )
+  indicator.style.setProperty('--reka-tabs-indicator-position', pos + 'px')
 }
 
 function _showEventsOverlay(doctype, docname) {
@@ -675,6 +583,7 @@ function _tryInjectEventsTab() {
   btn.setAttribute('data-xt-events-tab', '')
   btn.setAttribute('data-state', 'inactive')
   btn.className = refTab.className
+  btn.style.color = _TAB_INACTIVE_COLOR
 
   // Calendar icon + label — matches the icon+text structure of other tabs
   btn.innerHTML =
@@ -1009,26 +918,6 @@ onMounted(() => {
     setupFollowButtonHandlers()
   }
 
-  // Keyboard shortcut
-  const onKeydown = (e) => {
-    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-      e.preventDefault()
-      showSearch.value = !showSearch.value
-    }
-  }
-  document.addEventListener('keydown', onKeydown)
-
-  // Global API
-  window.crmXt = {
-    openSearch: () => {
-      showSearch.value = true
-    },
-    closeSearch: () => {
-      showSearch.value = false
-    },
-  }
-
-  injectSidebarBtn()
   loadSidebarItems() // fetches items → injects custom buttons + FCRM route
 
   // Re-inject on navigation (FCRM rebuilds sidebar on route changes)
@@ -1036,7 +925,6 @@ onMounted(() => {
   const onPopstate = () => {
     clearTimeout(reinjectTimer)
     reinjectTimer = setTimeout(() => {
-      injectSidebarBtn()
       injectCustomSidebarBtns()
       _syncActiveRow()
       _tryInjectEventsTab()
@@ -1050,7 +938,6 @@ onMounted(() => {
 
   // MutationObserver: re-inject if FCRM Vue router rebuilds the sidebar
   const obs = new MutationObserver(() => {
-    if (!document.getElementById('crm-xt-search-btn')) injectSidebarBtn()
     if (sidebarItems.value.length) {
       // Find first item with a label (separators have none)
       const firstLabeled = sidebarItems.value.find((i) => i.label)
@@ -1075,9 +962,7 @@ onMounted(() => {
     _teardownCollapseObserver()
     clearInterval(pollInterval)
     clearTimeout(reinjectTimer)
-    document.removeEventListener('keydown', onKeydown)
     window.removeEventListener('popstate', onPopstate)
-    if (window.crmXt) delete window.crmXt
   })
 })
 </script>

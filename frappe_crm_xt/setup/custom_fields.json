@@ -65,13 +65,6 @@
       "insert_after": "custom_estimatedpurchased_hours"
     },
     {
-      "fieldname": "custom__project_size",
-      "fieldtype": "Select",
-      "label": " Project Size",
-      "options": "\nSmall (< $50K)\nMedium ($50K - $100K)\nLarge ($100K+)",
-      "insert_after": "custom_project_size"
-    },
-    {
       "fieldname": "transaction_date",
       "fieldtype": "Date",
       "label": "Opportunity Date",

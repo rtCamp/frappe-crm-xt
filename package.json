@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "frappe_crm_xt",
-  "description": "Frappe CRM XT — extensible sidebar list views, global search, and ERPNext bridge hooks.",
+  "description": "Frappe CRM XT — extensible sidebar list views and ERPNext bridge hooks.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rtCamp/frappe-crm-xt.git"
