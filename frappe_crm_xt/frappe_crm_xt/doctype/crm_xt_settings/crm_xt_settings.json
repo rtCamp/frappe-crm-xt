@@ -35,7 +35,6 @@
    "options": "Notification"
   },
   {
-   "description": "Same digest for CSM pipelines (sent to the CSM channel). Leave blank to turn off.",
    "fieldname": "deal_inactivity_csm_notification",
    "fieldtype": "Link",
    "label": "CSM Notification",
