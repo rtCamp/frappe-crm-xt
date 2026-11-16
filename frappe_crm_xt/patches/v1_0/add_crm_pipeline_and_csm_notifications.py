@@ -10,16 +10,16 @@ import frappe
 CSM_WEBHOOK = "CRM CSM webhook"
 SUFFIX = " (CSM)"
 
-# old text value -> pipeline. Anything not listed keeps its (stripped) value as its own pipeline.
+# old text value (lowercase) -> pipeline. Anything not listed keeps its trimmed value as its own pipeline.
 MAP = {
-	"Inbound Pipeline": "Inbound",
-	"Renewals": "Renewals",
+	"inbound pipeline": "Inbound",
+	"renewals": "Renewals",
 	"renewal": "Renewals",
-	"Existing Accounts & Renewals": "Renewals",
-	"Existing Accounts & Renewal": "Renewals",
-	"Existing Clients & Renewals": "Renewals",
-	"Easy Engine": "EasyEngine",
-	"ERPNext": "ERPNext/Frappe",
+	"existing accounts & renewals": "Renewals",
+	"existing accounts & renewal": "Renewals",
+	"existing clients & renewals": "Renewals",
+	"easy engine": "EasyEngine",
+	"erpnext": "ERPNext/Frappe",
 }
 CSM_PIPELINES = {"Renewals"}  # Sales Manager can change the flag on the CRM Pipeline list
 
@@ -52,20 +52,38 @@ def execute():
 
 
 def migrate_pipelines():
-	rows = frappe.db.sql("select distinct custom_pipeline from `tabCRM Deal` where custom_pipeline != ''")
+	"""Every distinct deal value (trimmed) becomes a CRM Pipeline, and deals are pointed at its exact name.
+
+	Trimmed + case-insensitive on purpose: MariaDB compares 'X ' = 'X' = 'x', so a plain `distinct`
+	would hide variants. Raises if any deal is left without a matching pipeline.
+	"""
+	rows = frappe.db.sql(
+		"select distinct trim(custom_pipeline) from `tabCRM Deal` where trim(custom_pipeline) != ''"
+	)
 	for (old,) in rows:
-		new = MAP.get(old.strip(), old.strip())
+		new = MAP.get(old.lower(), old)
 		if not frappe.db.exists("CRM Pipeline", new):
 			frappe.get_doc(
 				{"doctype": "CRM Pipeline", "pipeline_name": new, "is_csm": int(new in CSM_PIPELINES)}
 			).insert(ignore_permissions=True)
-		if new != old:  # direct update: touching `modified` would fire "Deal updated" for every deal
-			frappe.db.sql(
-				"update `tabCRM Deal` set custom_pipeline = %s where custom_pipeline = binary %s", (new, old)
-			)
-	default = "Inbound"
-	if not frappe.db.exists("CRM Pipeline", default):
-		frappe.get_doc({"doctype": "CRM Pipeline", "pipeline_name": default}).insert(ignore_permissions=True)
+		new = frappe.db.get_value("CRM Pipeline", new, "name")  # canonical spelling of an existing row
+		# direct update: touching `modified` would fire "Deal updated" for every deal
+		frappe.db.sql(
+			"update `tabCRM Deal` set custom_pipeline = %(new)s"
+			" where trim(custom_pipeline) = %(old)s and custom_pipeline != binary %(new)s",
+			{"old": old, "new": new},
+		)
+	if not frappe.db.exists("CRM Pipeline", "Inbound"):  # default of the field
+		frappe.get_doc({"doctype": "CRM Pipeline", "pipeline_name": "Inbound"}).insert(
+			ignore_permissions=True
+		)
+
+	orphans = frappe.db.sql(
+		"select count(*) from `tabCRM Deal` d left join `tabCRM Pipeline` p on p.name = binary d.custom_pipeline"
+		" where d.custom_pipeline != '' and p.name is null"
+	)[0][0]
+	if orphans:
+		frappe.throw(f"{orphans} CRM Deal(s) still have a pipeline missing from CRM Pipeline")
 
 
 def split_notifications():
