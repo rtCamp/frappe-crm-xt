@@ -9,7 +9,7 @@ import frappe
 from frappe.query_builder.functions import Count
 from pypika.functions import Cast, Trim
 
-CSM_WEBHOOK = "CRM CSM webhook"
+CSM_WEBHOOK = "CRM CSM"
 SUFFIX = " (CSM)"
 
 # old text value (lowercase) -> pipeline. Anything not listed keeps its trimmed value as its own pipeline.
@@ -102,9 +102,11 @@ def split_notifications():
 		if not frappe.db.exists("Notification", name):
 			continue
 		sales = frappe.get_doc("Notification", name)
-		if sales.condition_type == "Filters" and sales.filters:
-			# Filters and the Python routing check can't be combined in one Notification
-			frappe.throw(f"Convert {name!r} to a Python condition first, then re-run migrate")
+		if sales.condition_type == "Filters":
+			if sales.filters:
+				# Filters and the Python routing check can't be combined in one Notification
+				frappe.throw(f"Convert {name!r} to a Python condition first, then re-run migrate")
+			sales.condition_type = "Python"  # no filters set: Filters mode would ignore the routing check
 		old = sales.condition or ""
 		is_csm, not_csm = f"'{CSM_KEYWORD}' in {pipeline}", f"'{CSM_KEYWORD}' not in {pipeline}"
 		# the sales alert's own condition, without the routing check (also when re-running)
@@ -115,6 +117,8 @@ def split_notifications():
 		else:
 			own = f"({old})" if old else ""
 		base = f"{own} and " if own else ""
+		# only the old renewal rule (or none) is replaced; any other condition is kept in both channels
+		keep_condition = keep_condition or old not in ("", not_csm)
 		csm_name = name + SUFFIX
 		if not frappe.db.exists("Notification", csm_name):
 			csm = frappe.copy_doc(sales)
@@ -128,5 +132,7 @@ def split_notifications():
 			sales.save(ignore_permissions=True)
 
 	inactivity = "CRM Slack — CRM Deal Inactivity (7 days)" + SUFFIX
-	if frappe.db.exists("Notification", inactivity):
+	if frappe.db.exists("Notification", inactivity) and not frappe.db.get_single_value(
+		"CRM XT Settings", "deal_inactivity_csm_notification"
+	):  # don't undo an admin clearing it
 		frappe.db.set_single_value("CRM XT Settings", "deal_inactivity_csm_notification", inactivity)

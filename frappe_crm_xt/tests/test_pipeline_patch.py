@@ -1,7 +1,10 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from frappe_crm_xt.patches.v1_0.add_crm_pipeline_and_csm_notifications import migrate_pipelines
+from frappe_crm_xt.patches.v1_0.add_crm_pipeline_and_csm_notifications import (
+	migrate_pipelines,
+	split_notifications,
+)
 
 
 class TestPipelinePatch(IntegrationTestCase):
@@ -24,3 +27,63 @@ class TestPipelinePatch(IntegrationTestCase):
 		self.assertEqual(before, {n: frappe.db.get_value("CRM Deal", n, "modified") for n in names})
 		migrate_pipelines()  # safe to re-run
 		self.assertEqual(got, [frappe.db.get_value("CRM Deal", n, "custom_pipeline") for n in names])
+
+
+class TestSplitNotifications(IntegrationTestCase):
+	NAME = "CRM Slack — CRM Deal Inactivity (7 days)"
+
+	def _sales(self, condition, condition_type="Python"):
+		frappe.delete_doc("Notification", self.NAME + " (CSM)", force=True, ignore_permissions=True)
+		if not frappe.db.exists("Notification", self.NAME):
+			frappe.get_doc(
+				{
+					"doctype": "Notification",
+					"name": self.NAME,
+					"subject": "x",
+					"document_type": "CRM Deal",
+					"event": "Custom",
+					"channel": "System Notification",
+					"message": "x",
+				}
+			).insert(ignore_permissions=True)
+		n = frappe.get_doc("Notification", self.NAME)
+		n.condition_type, n.condition = condition_type, condition
+		n.save(ignore_permissions=True)
+
+	def _conditions(self):
+		get = frappe.db.get_value
+		return get("Notification", self.NAME, "condition"), get(
+			"Notification", self.NAME + " (CSM)", "condition"
+		)
+
+	def test_old_renewal_rule_is_replaced(self):
+		self._sales("'renewal' not in (doc.custom_pipeline or '').lower()")
+		split_notifications()
+		self.assertEqual(
+			self._conditions(),
+			(
+				"'renewal' not in (doc.custom_pipeline or '').lower()",
+				"'renewal' in (doc.custom_pipeline or '').lower()",
+			),
+		)
+
+	def test_custom_condition_is_kept_in_both_and_rerun_changes_nothing(self):
+		self._sales('doc.status == "Open"')
+		split_notifications()
+		first = self._conditions()
+		self.assertEqual(
+			first[0], "(doc.status == \"Open\") and 'renewal' not in (doc.custom_pipeline or '').lower()"
+		)
+		self.assertEqual(
+			first[1], "(doc.status == \"Open\") and 'renewal' in (doc.custom_pipeline or '').lower()"
+		)
+		split_notifications()
+		self.assertEqual(self._conditions(), first)
+
+	def test_filters_mode_without_filters_becomes_python(self):
+		self._sales(None, condition_type="Filters")
+		split_notifications()
+		self.assertEqual(frappe.db.get_value("Notification", self.NAME, "condition_type"), "Python")
+		self.assertEqual(
+			frappe.db.get_value("Notification", self.NAME + " (CSM)", "condition_type"), "Python"
+		)
