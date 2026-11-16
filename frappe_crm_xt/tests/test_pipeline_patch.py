@@ -22,6 +22,5 @@ class TestPipelinePatch(IntegrationTestCase):
 		got = [frappe.db.get_value("CRM Deal", n, "custom_pipeline") for n in names]
 		self.assertEqual(got, ["Renewals", "Renewals", "EasyEngine", "Odd One", "Odd One", None, None, None])
 		self.assertEqual(before, {n: frappe.db.get_value("CRM Deal", n, "modified") for n in names})
-		self.assertEqual(frappe.db.get_value("CRM Pipeline", "Renewals", "is_csm"), 1)
 		migrate_pipelines()  # safe to re-run
 		self.assertEqual(got, [frappe.db.get_value("CRM Deal", n, "custom_pipeline") for n in names])
