@@ -6,6 +6,8 @@
 """
 
 import frappe
+from frappe.query_builder.functions import Count
+from pypika.functions import Cast, Trim
 
 CSM_WEBHOOK = "CRM CSM webhook"
 SUFFIX = " (CSM)"
@@ -57,10 +59,9 @@ def migrate_pipelines():
 	Trimmed + case-insensitive on purpose: MariaDB compares 'X ' = 'X' = 'x', so a plain `distinct`
 	would hide variants. Raises if any deal is left without a matching pipeline.
 	"""
-	rows = frappe.db.sql(
-		"select distinct trim(custom_pipeline) from `tabCRM Deal` where trim(custom_pipeline) != ''"
-	)
-	for (old,) in rows:
+	deal = frappe.qb.DocType("CRM Deal")
+	trimmed = Trim(deal.custom_pipeline)
+	for (old,) in frappe.qb.from_(deal).select(trimmed).distinct().where(trimmed != "").run():
 		new = MAP.get(old.lower(), old)
 		if not frappe.db.exists("CRM Pipeline", new):
 			frappe.get_doc(
@@ -68,20 +69,26 @@ def migrate_pipelines():
 			).insert(ignore_permissions=True)
 		new = frappe.db.get_value("CRM Pipeline", new, "name")  # canonical spelling of an existing row
 		# direct update: touching `modified` would fire "Deal updated" for every deal
-		frappe.db.sql(
-			"update `tabCRM Deal` set custom_pipeline = %(new)s"
-			" where trim(custom_pipeline) = %(old)s and custom_pipeline != binary %(new)s",
-			{"old": old, "new": new},
-		)
+		(
+			frappe.qb.update(deal)
+			.set(deal.custom_pipeline, new)
+			.where(trimmed == old)
+			.where(deal.custom_pipeline != Cast(new, "BINARY"))  # byte compare, so case/space variants differ
+		).run()
 	if not frappe.db.exists("CRM Pipeline", "Inbound"):  # default of the field
 		frappe.get_doc({"doctype": "CRM Pipeline", "pipeline_name": "Inbound"}).insert(
 			ignore_permissions=True
 		)
 
-	orphans = frappe.db.sql(
-		"select count(*) from `tabCRM Deal` d left join `tabCRM Pipeline` p on p.name = binary d.custom_pipeline"
-		" where d.custom_pipeline != '' and p.name is null"
-	)[0][0]
+	pipeline = frappe.qb.DocType("CRM Pipeline")
+	orphans = (
+		frappe.qb.from_(deal)
+		.left_join(pipeline)
+		.on(pipeline.name == Cast(deal.custom_pipeline, "BINARY"))
+		.select(Count("*"))
+		.where(deal.custom_pipeline != "")
+		.where(pipeline.name.isnull())
+	).run()[0][0]
 	if orphans:
 		frappe.throw(f"{orphans} CRM Deal(s) still have a pipeline missing from CRM Pipeline")
 
