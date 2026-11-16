@@ -61,6 +61,13 @@ def migrate_pipelines():
 	"""
 	deal = frappe.qb.DocType("CRM Deal")
 	trimmed = Trim(deal.custom_pipeline)
+	# '' or whitespace-only -> NULL, so "no pipeline" has one representation
+	(
+		frappe.qb.update(deal)
+		.set(deal.custom_pipeline, None)
+		.where(deal.custom_pipeline.isnotnull())
+		.where(trimmed == "")
+	).run()
 	for (old,) in frappe.qb.from_(deal).select(trimmed).distinct().where(trimmed != "").run():
 		new = MAP.get(old.lower(), old)
 		if not frappe.db.exists("CRM Pipeline", new):
