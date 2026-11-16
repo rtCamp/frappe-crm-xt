@@ -82,11 +82,6 @@ def migrate_pipelines():
 			.where(trimmed == old)
 			.where(deal.custom_pipeline != Cast(new, "BINARY"))  # byte compare, so case/space variants differ
 		).run()
-	if not frappe.db.exists("CRM Pipeline", "Inbound"):  # default of the field
-		frappe.get_doc({"doctype": "CRM Pipeline", "pipeline_name": "Inbound"}).insert(
-			ignore_permissions=True
-		)
-
 	pipeline = frappe.qb.DocType("CRM Pipeline")
 	orphans = (
 		frappe.qb.from_(deal)
@@ -106,6 +101,9 @@ def split_notifications():
 		if not frappe.db.exists("Notification", name):
 			continue
 		sales = frappe.get_doc("Notification", name)
+		if sales.condition_type == "Filters" and sales.filters:
+			# Filters and the Python routing check can't be combined in one Notification
+			frappe.throw(f"Convert {name!r} to a Python condition first, then re-run migrate")
 		old = sales.condition or ""
 		if "CRM Pipeline" in old:
 			continue  # already split

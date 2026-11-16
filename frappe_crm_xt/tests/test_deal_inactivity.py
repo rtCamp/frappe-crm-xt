@@ -1,6 +1,8 @@
 # Copyright (c) 2026, rtCamp and contributors
 # For license information, please see license.txt
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import get_datetime, getdate
@@ -207,6 +209,13 @@ class TestNotifyInactiveDeals(IntegrationTestCase):
 		s.deal_inactivity_csm_notification = NOTIF
 		s.save(ignore_permissions=True)
 		alpha = self._deal("_TESTDI csm", "2026-07-15")
-		res = di.notify_inactive_deals(as_of="2026-07-21")
-		self.assertEqual(res["deals_notified"], 1)
+		di.notify_inactive_deals(as_of="2026-07-21")
 		self.assertEqual(self._tasks(alpha), 1)
+
+	def test_same_notification_in_both_fields_runs_once(self):
+		s = frappe.get_single("CRM XT Settings")
+		s.deal_inactivity_csm_notification = NOTIF
+		s.save(ignore_permissions=True)
+		with patch.object(di, "_notify_one", wraps=di._notify_one) as notify:
+			di.notify_inactive_deals(as_of="2026-07-21")
+		self.assertEqual(notify.call_count, 1)

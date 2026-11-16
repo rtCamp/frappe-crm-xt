@@ -13,8 +13,17 @@ def after_install():
 
 def install():
 	"""Apply all rtcamp-side CRM customisations (idempotent; runs on migrate)."""
+	install_pipelines()
 	install_custom_fields()
 	install_property_setters()
+
+
+def install_pipelines():
+	"""Seed the default pipeline so a fresh install has one to pick (idempotent)."""
+	if not frappe.db.exists("CRM Pipeline", "Inbound"):
+		frappe.get_doc({"doctype": "CRM Pipeline", "pipeline_name": "Inbound"}).insert(
+			ignore_permissions=True
+		)
 
 
 def install_custom_fields():
