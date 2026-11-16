@@ -2,11 +2,11 @@
   "CRM Deal": [
     {
       "fieldname": "custom_pipeline",
-      "fieldtype": "Data",
+      "fieldtype": "Link",
       "label": "Pipeline",
+      "options": "CRM Pipeline",
       "default": "Inbound",
-      "insert_after": "next_step",
-      "translatable": 1
+      "insert_after": "next_step"
     },
     {
       "fieldname": "custom_pipedrive_deal_id",

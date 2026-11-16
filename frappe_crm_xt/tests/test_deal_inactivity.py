@@ -1,6 +1,8 @@
 # Copyright (c) 2026, rtCamp and contributors
 # For license information, please see license.txt
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import get_datetime, getdate
@@ -126,6 +128,7 @@ class TestNotifyInactiveDeals(IntegrationTestCase):
 
 		s = frappe.get_single("CRM XT Settings")
 		s.deal_inactivity_notification = NOTIF
+		s.deal_inactivity_csm_notification = None  # settings are cached; keep tests independent
 		s.deal_inactivity_days = 3  # 3 WORKING days
 		s.deal_inactivity_use_company_holiday_list = 0
 		s.deal_inactivity_holiday_list = HL  # these tests pin holidays to this list only
@@ -199,3 +202,20 @@ class TestNotifyInactiveDeals(IntegrationTestCase):
 		self.assertEqual(res["deals_notified"], 0)
 		self.assertEqual(res["reason"], "no notification selected")
 		self.assertEqual(self._tasks(alpha), 0)
+
+	def test_csm_notification_runs_on_its_own(self):
+		s = frappe.get_single("CRM XT Settings")
+		s.deal_inactivity_notification = None
+		s.deal_inactivity_csm_notification = NOTIF
+		s.save(ignore_permissions=True)
+		alpha = self._deal("_TESTDI csm", "2026-07-15")
+		di.notify_inactive_deals(as_of="2026-07-21")
+		self.assertEqual(self._tasks(alpha), 1)
+
+	def test_same_notification_in_both_fields_runs_once(self):
+		s = frappe.get_single("CRM XT Settings")
+		s.deal_inactivity_csm_notification = NOTIF
+		s.save(ignore_permissions=True)
+		with patch.object(di, "_notify_one", wraps=di._notify_one) as notify:
+			di.notify_inactive_deals(as_of="2026-07-21")
+		self.assertEqual(notify.call_count, 1)
