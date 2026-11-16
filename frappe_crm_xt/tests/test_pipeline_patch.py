@@ -88,8 +88,15 @@ class TestSplitNotifications(IntegrationTestCase):
 			frappe.db.get_value("Notification", self.NAME + " (CSM)", "condition_type"), "Python"
 		)
 
-	def test_unrecognised_renewal_rule_stops_the_patch(self):
-		self._sales("doc.a or 'renewal' not in (doc.custom_pipeline or '').lower()")
-		with self.assertRaises(frappe.ValidationError):
-			split_notifications()
+	def test_unrecognised_renewal_rule_is_skipped(self):
+		old = "doc.a or 'Renewal' not in (doc.custom_pipeline or '')"
+		self._sales(old)
+		split_notifications()
+		self.assertEqual(self._conditions(), (old, None))
+
+	def test_filters_mode_with_filters_is_skipped(self):
+		self._sales(None, condition_type="Filters")
+		frappe.db.set_value("Notification", self.NAME, "filters", '[["CRM Deal","status","=","Open"]]')
+		split_notifications()
+		self.assertEqual(frappe.db.get_value("Notification", self.NAME, "condition_type"), "Filters")
 		self.assertFalse(frappe.db.exists("Notification", self.NAME + " (CSM)"))

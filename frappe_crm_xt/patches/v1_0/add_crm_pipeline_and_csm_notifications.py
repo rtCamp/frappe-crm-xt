@@ -78,6 +78,13 @@ def migrate_pipelines():
 		frappe.qb.update(deal).set(deal.custom_pipeline, new).where(trimmed == old).run()
 
 
+def _skip(name, reason):
+	"""A condition we can't split safely is left as it is: it must not stop the migrate."""
+	message = f"CSM split skipped for {name!r}: {reason}"
+	print(message)
+	frappe.log_error(title="CRM CSM alert split skipped", message=message)
+
+
 def split_notifications():
 	webhook = CSM_WEBHOOK if frappe.db.exists("Slack Webhook URL", CSM_WEBHOOK) else None
 	for name, pipeline in ALERTS.items():
@@ -87,7 +94,11 @@ def split_notifications():
 		if sales.condition_type == "Filters":
 			if sales.filters:
 				# Filters and the Python routing check can't be combined in one Notification
-				frappe.throw(f"Convert {name!r} to a Python condition first, then re-run migrate")
+				_skip(
+					name,
+					"uses Filters mode; convert it to a Python condition and add the routing check by hand",
+				)
+				continue
 			sales.condition_type = "Python"  # no filters set: Filters mode would ignore the routing check
 		old = sales.condition or ""
 		is_csm, not_csm = f"'{CSM_KEYWORD}' in {pipeline}", f"'{CSM_KEYWORD}' not in {pipeline}"
@@ -97,9 +108,10 @@ def split_notifications():
 			own = ""
 		elif old.endswith(f" and {not_csm}"):
 			own = old.removesuffix(f" and {not_csm}")
-		elif CSM_KEYWORD in old:
+		elif CSM_KEYWORD in old.lower():
 			# a differently spelled renewal rule would make the CSM copy never fire
-			frappe.throw(f"Fix the {CSM_KEYWORD!r} condition on {name!r} by hand, then re-run migrate: {old}")
+			_skip(name, f"has an unrecognised {CSM_KEYWORD!r} rule, split it by hand: {old}")
+			continue
 		else:
 			own = f"({old})" if old else ""
 		base = f"{own} and " if own else ""
